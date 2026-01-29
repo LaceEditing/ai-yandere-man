@@ -1,0 +1,55 @@
+[gd_scene format=3 uid="uid://b4xhh0srl2yh7"]
+
+[ext_resource type="Script" uid="uid://bwbxkic00xvcf" path="res://Scripts/DialogueUI.gd" id="1_q8n66"]
+
+[sub_resource type="Theme" id="Theme_mrc6h"]
+default_font_size = 20
+
+[node name="DialogueUI" type="CanvasLayer" unique_id=1741724806]
+layer = 10
+script = ExtResource("1_q8n66")
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=2123408381]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -74.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=1920703857]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer" unique_id=2070821817]
+layout_mode = 2
+
+[node name="NPCNameLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=201182804]
+layout_mode = 2
+theme = SubResource("Theme_mrc6h")
+text = "NPC Name"
+
+[node name="DialogueText" type="RichTextLabel" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=618751742]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+scroll_following = true
+
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1335465486]
+layout_mode = 2
+
+[node name="PlayerInput" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=75552508]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Type your reply..."
+
+[node name="SendButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/PlayerInput" unique_id=280379662]
+layout_mode = 0
+offset_right = 8.0
+offset_bottom = 8.0
+text = "Send"
+
+[node name="CloseButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=463083863]
+layout_mode = 2
+text = "Close (ESC)"

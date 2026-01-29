@@ -1,0 +1,77 @@
+[gd_scene format=3 uid="uid://cyg2iqwc2h326"]
+
+[ext_resource type="PackedScene" uid="uid://bumo05wek6sx3" path="res://Scenes/character.tscn" id="1_jjgbg"]
+[ext_resource type="PackedScene" uid="uid://bs2jm62cmkbrk" path="res://addons/instant-realistic-light/light_scene.tscn" id="2_bo1nx"]
+[ext_resource type="PackedScene" uid="uid://5j3g3jx65e7m" path="res://Scenes/npc_base.tscn" id="3_8gbba"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bo1nx"]
+albedo_color = Color(0.28580943, 0.21625122, 0.3295984, 1)
+
+[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_gn88m"]
+ground_color = Color(0, 0, 0, 1)
+
+[sub_resource type="Sky" id="Sky_tyhie"]
+sky_material = SubResource("PhysicalSkyMaterial_gn88m")
+radiance_size = 2
+
+[sub_resource type="Environment" id="Environment_f8w8m"]
+background_mode = 2
+background_intensity = 100000.0
+sky = SubResource("Sky_tyhie")
+tonemap_mode = 3
+tonemap_white = 8.0
+ssao_enabled = true
+ssao_detail = 2.0
+sdfgi_enabled = true
+sdfgi_bounce_feedback = 0.9
+glow_enabled = true
+glow_normalized = true
+glow_bloom = 0.2
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.01
+volumetric_fog_gi_inject = 1.14
+volumetric_fog_anisotropy = 0.7
+volumetric_fog_sky_affect = 0.295
+adjustment_saturation = 1.17
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_qo5hu"]
+exposure_multiplier = 3.069
+auto_exposure_scale = 0.22
+auto_exposure_speed = 0.8
+dof_blur_far_distance = 1.44
+dof_blur_near_distance = 0.01
+auto_exposure_min_sensitivity = 8.01
+
+[sub_resource type="Compositor" id="Compositor_8gbba"]
+resource_local_to_scene = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kry3j"]
+albedo_color = Color(0.6036, 0.47919852, 0, 1)
+
+[node name="Main" type="Node3D" unique_id=1446083720]
+
+[node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=1836521266]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3190002, -0.3383789, -6.600464)
+use_collision = true
+size = Vector3(13.02887, 0.3232422, 20)
+material = SubResource("StandardMaterial3D_bo1nx")
+
+[node name="Character" parent="." unique_id=864869144 instance=ExtResource("1_jjgbg")]
+
+[node name="WorldEnvironment" parent="." unique_id=393079250 instance=ExtResource("2_bo1nx")]
+environment = SubResource("Environment_f8w8m")
+camera_attributes = SubResource("CameraAttributesPractical_qo5hu")
+compositor = SubResource("Compositor_8gbba")
+
+[node name="NPC_Carlito" parent="." unique_id=1257932761 instance=ExtResource("3_8gbba")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.967917, 0.5444555, -13.432383)
+npc_name = "Carlito The Schemer"
+npc_personality = "Grumpy old homeless man."
+npc_background = "Former gas station manager, got fired for stealing from the register. Now tries to make it big as an entrepreneur."
+npc_goals = "Make money, retire comfortably, scam people."
+npc_knowledge = "Knows about local gossip and current events."
+
+[node name="MeshInstance3D" parent="NPC_Carlito" index="1" unique_id=1325260183]
+material_override = SubResource("StandardMaterial3D_kry3j")
+
+[editable path="NPC_Carlito"]

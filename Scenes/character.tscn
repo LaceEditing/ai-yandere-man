@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://bumo05wek6sx3"]
+
+[ext_resource type="Script" uid="uid://cr61ufwfoak37" path="res://Scripts/character.gd" id="1_lkv7d"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_he2x2"]
+
+[node name="Character" type="CharacterBody3D" unique_id=864869144]
+script = ExtResource("1_lkv7d")
+
+[node name="Head" type="Node3D" parent="." unique_id=1798829846]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head" unique_id=694857952]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2131141174]
+shape = SubResource("CapsuleShape3D_he2x2")

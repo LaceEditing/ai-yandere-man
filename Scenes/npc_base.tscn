@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://5j3g3jx65e7m"]
+
+[ext_resource type="Script" uid="uid://dyuiw13kalc3f" path="res://Scripts/NPCBase.gd" id="1_rcxfb"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rgmlm"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rcxfb"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_rcxfb"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_pbdkk"]
+size = Vector3(1.2011719, 1.4467773, 1.2363892)
+
+[node name="NPCBase" type="CharacterBody3D" unique_id=1257932761]
+script = ExtResource("1_rcxfb")
+greeting = "Hello there."
+max_history_turns = 50
+enable_forgetting = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2039302470]
+shape = SubResource("CapsuleShape3D_rgmlm")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1325260183]
+material_override = SubResource("StandardMaterial3D_rcxfb")
+mesh = SubResource("CapsuleMesh_rcxfb")
+
+[node name="ChatNode" type="NobodyWhoChat" parent="." unique_id=1361988431]
+
+[node name="Area3D" type="Area3D" parent="." unique_id=931120311]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D" unique_id=1267750119]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.021484375, 0.22338867, -0.016021729)
+shape = SubResource("BoxShape3D_pbdkk")

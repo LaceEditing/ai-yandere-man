@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://cx77okrl0fcu8"]
+
+[ext_resource type="Script" uid="uid://bsvoyrhbok7in" path="res://Scripts/AIManager.gd" id="1_akv3f"]
+
+[node name="AIManager" type="Node" unique_id=1457609475]
+script = ExtResource("1_akv3f")
+
+[node name="LLMModel" type="NobodyWhoModel" parent="." unique_id=500969697]
