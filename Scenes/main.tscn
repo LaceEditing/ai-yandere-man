@@ -57,6 +57,10 @@ size = Vector3(13.02887, 0.3232422, 20)
 material = SubResource("StandardMaterial3D_bo1nx")
 
 [node name="Character" parent="." unique_id=864869144 instance=ExtResource("1_jjgbg")]
+walk_speed = null
+sprint_speed = null
+jump_velocity = null
+mouse_sensitivity = null
 
 [node name="WorldEnvironment" parent="." unique_id=393079250 instance=ExtResource("2_bo1nx")]
 environment = SubResource("Environment_f8w8m")
@@ -64,7 +68,7 @@ camera_attributes = SubResource("CameraAttributesPractical_qo5hu")
 compositor = SubResource("Compositor_8gbba")
 
 [node name="NPC_Carlito" parent="." unique_id=1257932761 instance=ExtResource("3_8gbba")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.967917, 0.5444555, -13.432383)
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -1.967917, 0.5444555, -13.432383)
 npc_name = "Carlito The Schemer"
 npc_personality = "Grumpy old homeless man."
 npc_background = "Former gas station manager, got fired for stealing from the register. Now tries to make it big as an entrepreneur."

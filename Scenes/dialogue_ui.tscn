@@ -38,17 +38,21 @@ scroll_following = true
 
 [node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1335465486]
 layout_mode = 2
+theme_override_constants/separation = 8
 
 [node name="PlayerInput" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=75552508]
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Type your reply..."
 
-[node name="SendButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/PlayerInput" unique_id=280379662]
-layout_mode = 0
-offset_right = 8.0
-offset_bottom = 8.0
+[node name="SendButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=280379662]
+layout_mode = 2
 text = "Send"
+
+[node name="MicButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=50812787]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Voice (V)"
 
 [node name="CloseButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=463083863]
 layout_mode = 2

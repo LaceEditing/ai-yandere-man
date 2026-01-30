@@ -1,0 +1,180 @@
+[gd_scene format=3 uid="uid://xipqddr74ji1"]
+
+[ext_resource type="Script" uid="uid://gitaves72c8x" path="res://Scripts/AISettingsMenu.gd" id="1_settings"]
+
+[sub_resource type="Theme" id="Theme_settings"]
+default_font_size = 16
+
+[node name="AISettingsMenu" type="CanvasLayer" unique_id=872285818]
+layer = 20
+script = ExtResource("1_settings")
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1336565170]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -280.0
+offset_right = 320.0
+offset_bottom = 280.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_settings")
+
+[node name="ScrollContainer" type="ScrollContainer" parent="PanelContainer" unique_id=1696909998]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/ScrollContainer" unique_id=42740037]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer" unique_id=1073008730]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=113958271]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "AI Settings"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=1212867377]
+layout_mode = 2
+
+[node name="ProviderSection" type="HBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=353618411]
+layout_mode = 2
+
+[node name="ProviderLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ProviderSection" unique_id=263167262]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "AI Provider:"
+
+[node name="ProviderOption" type="OptionButton" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ProviderSection" unique_id=293586207]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=2095487862]
+layout_mode = 2
+text = "Status: Unknown"
+horizontal_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=929563472]
+layout_mode = 2
+
+[node name="LocalSection" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=965420946]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LocalTitle" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/LocalSection" unique_id=946073094]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Local Model Settings"
+
+[node name="ModelPathLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/LocalSection" unique_id=2064936953]
+layout_mode = 2
+text = "Model: qwen2.5-0.5b-instruct-q4_k_m.gguf"
+
+[node name="LocalNote" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/LocalSection" unique_id=1510414222]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "Local models run on your hardware. No internet required."
+autowrap_mode = 2
+
+[node name="GroqSection" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=2132023978]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="GroqTitle" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=517117809]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Groq API Settings"
+
+[node name="APIKeyLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=29737430]
+layout_mode = 2
+text = "API Key:"
+
+[node name="APIKeyInput" type="LineEdit" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=1930589942]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Enter your Groq API key..."
+secret = true
+
+[node name="ShowKeyButton" type="Button" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=985842763]
+layout_mode = 2
+toggle_mode = true
+text = "Show"
+
+[node name="ModelLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=669957222]
+layout_mode = 2
+text = "Model:"
+
+[node name="GroqModelOption" type="OptionButton" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=1123385079]
+layout_mode = 2
+
+[node name="ModelInfoLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=918692761]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.8, 1, 1)
+theme_override_font_sizes/font_size = 12
+text = "Model description appears here"
+autowrap_mode = 2
+
+[node name="GroqNote" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection" unique_id=1700441791]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "Get your free API key at console.groq.com"
+autowrap_mode = 2
+
+[node name="HSeparator3" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=1844974331]
+layout_mode = 2
+
+[node name="VoiceSection" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=1803855885]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="VoiceTitle" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/VoiceSection" unique_id=1330539343]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Voice Input (Groq Whisper)"
+
+[node name="VoiceStatusLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/VoiceSection" unique_id=619874139]
+layout_mode = 2
+text = "Voice Input: Not configured"
+
+[node name="VoiceNote" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/VoiceSection" unique_id=1111331258]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "Voice input uses the same Groq API key configured above."
+autowrap_mode = 2
+
+[node name="HSeparator4" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=1922240265]
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=862043703]
+layout_mode = 2
+alignment = 1
+
+[node name="ApplyButton" type="Button" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=1504382100]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Apply"
+
+[node name="CloseButton" type="Button" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ButtonContainer" unique_id=520248158]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Close"

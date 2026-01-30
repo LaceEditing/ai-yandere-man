@@ -1,8 +1,16 @@
 [gd_scene format=3 uid="uid://cx77okrl0fcu8"]
 
 [ext_resource type="Script" uid="uid://bsvoyrhbok7in" path="res://Scripts/AIManager.gd" id="1_akv3f"]
+[ext_resource type="Script" uid="uid://bjo37hfhwx6qy" path="res://Scripts/GroqProvider.gd" id="2_groq"]
+[ext_resource type="Script" uid="uid://bbn1iodbvv1m4" path="res://Scripts/GroqWhisperSTT.gd" id="3_groqwhisper"]
 
 [node name="AIManager" type="Node" unique_id=1457609475]
 script = ExtResource("1_akv3f")
 
 [node name="LLMModel" type="NobodyWhoModel" parent="." unique_id=500969697]
+
+[node name="GroqProvider" type="Node" parent="." unique_id=1456624774]
+script = ExtResource("2_groq")
+
+[node name="GroqWhisperSTT" type="Node" parent="." unique_id=941509722]
+script = ExtResource("3_groqwhisper")

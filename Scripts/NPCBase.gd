@@ -44,19 +44,24 @@ var is_talking = false
 var current_response = ""
 var conversation_history: Array = []
 var forget_timer: Timer
+var system_prompt: String = ""
+
+# Groq-specific state
+var groq_provider = null
+var using_groq: bool = false
 
 signal dialogue_updated(text: String)
 signal dialogue_finished(text: String)
 
 func _ready():
-	chat_node.model_node = AIManager.llm_model
-	chat_node.system_prompt = build_system_prompt()
+	# Build system prompt first (needed for both providers)
+	system_prompt = build_system_prompt()
 	
-	# Starts the worker instantly to avoid hangups during dialogue
-	chat_node.start_worker()
+	# Setup based on current provider
+	_setup_provider()
 	
-	chat_node.response_updated.connect(_on_response_token)
-	chat_node.response_finished.connect(_on_response_complete)
+	# Listen for provider changes
+	AIManager.provider_changed.connect(_on_provider_changed)
 	
 	# Create forget timer
 	if enable_forgetting:
@@ -68,11 +73,75 @@ func _ready():
 	# Register with NPCManager for global access
 	NPCManager.register_npc(self)
 	
-	print(npc_name, " is ready! Press Enter to talk.")
+	print(npc_name, " is ready! Provider: ", AIManager.get_provider_name())
+
+func _setup_provider():
+	using_groq = AIManager.is_groq()
+	
+	if using_groq:
+		_setup_groq()
+	else:
+		_setup_local()
+
+func _setup_local():
+	# Setup for NobodyWho local model
+	if chat_node:
+		chat_node.model_node = AIManager.llm_model
+		chat_node.system_prompt = system_prompt
+		
+		# Disconnect Groq signals if connected
+		if groq_provider:
+			_disconnect_groq_signals()
+		
+		# Connect local signals
+		if not chat_node.response_updated.is_connected(_on_response_token):
+			chat_node.response_updated.connect(_on_response_token)
+		if not chat_node.response_finished.is_connected(_on_response_complete):
+			chat_node.response_finished.connect(_on_response_complete)
+		
+		# Start worker
+		chat_node.start_worker()
+		
+		print(npc_name, " using local NobodyWho model")
+
+func _setup_groq():
+	# Setup for Groq API
+	groq_provider = AIManager.get_chat_provider()
+	
+	if groq_provider:
+		_connect_groq_signals()
+		print(npc_name, " using Groq API")
+	else:
+		push_error("Groq provider not available!")
+
+func _connect_groq_signals():
+	if groq_provider:
+		if not groq_provider.response_updated.is_connected(_on_groq_response_updated):
+			groq_provider.response_updated.connect(_on_groq_response_updated)
+		if not groq_provider.response_finished.is_connected(_on_groq_response_finished):
+			groq_provider.response_finished.connect(_on_groq_response_finished)
+		if not groq_provider.request_failed.is_connected(_on_groq_request_failed):
+			groq_provider.request_failed.connect(_on_groq_request_failed)
+
+func _disconnect_groq_signals():
+	if groq_provider:
+		if groq_provider.response_updated.is_connected(_on_groq_response_updated):
+			groq_provider.response_updated.disconnect(_on_groq_response_updated)
+		if groq_provider.response_finished.is_connected(_on_groq_response_finished):
+			groq_provider.response_finished.disconnect(_on_groq_response_finished)
+		if groq_provider.request_failed.is_connected(_on_groq_request_failed):
+			groq_provider.request_failed.disconnect(_on_groq_request_failed)
+
+func _on_provider_changed(_provider):
+	print(npc_name, " switching provider...")
+	_setup_provider()
 
 func _exit_tree():
 	# Unregister when removed
 	NPCManager.unregister_npc(self)
+	
+	# Disconnect Groq signals
+	_disconnect_groq_signals()
 
 func build_system_prompt() -> String:
 	var prompt = """You are {name}, an NPC in an immersive game.
@@ -198,7 +267,33 @@ func talk_to_npc(message: String):
 		trim_conversation_history()
 	
 	current_response = ""
+	
+	# Route to appropriate provider
+	if using_groq:
+		_send_to_groq(message)
+	else:
+		_send_to_local(message)
+
+func _send_to_local(message: String):
 	chat_node.ask(message)
+
+func _send_to_groq(message: String):
+	if not groq_provider:
+		dialogue_finished.emit("[Error: Groq provider not available]")
+		return
+	
+	# Set the system prompt
+	groq_provider.set_system_prompt(system_prompt)
+	
+	# Send with conversation history
+	var history_to_send = conversation_history.duplicate()
+	# Remove the last message since we're sending it separately
+	if history_to_send.size() > 0:
+		history_to_send.pop_back()
+	
+	groq_provider.ask(message, history_to_send)
+
+# ============ Local Model Callbacks ============
 
 func _on_response_token(token: String):
 	current_response += token
@@ -219,6 +314,34 @@ func _on_response_complete(full_response: String):
 	print(npc_name, ": ", cleaned)
 	current_response = cleaned
 	dialogue_finished.emit(cleaned)
+
+# ============ Groq API Callbacks ============
+
+func _on_groq_response_updated(text: String):
+	current_response = text
+	var cleaned = text
+	if remove_action_markers:
+		cleaned = clean_response(cleaned)
+	dialogue_updated.emit(cleaned)
+
+func _on_groq_response_finished(full_response: String):
+	var cleaned = full_response
+	if remove_action_markers:
+		cleaned = clean_response(cleaned)
+	
+	if enable_memory:
+		conversation_history.append({"role": "assistant", "content": cleaned})
+		trim_conversation_history()
+	
+	print(npc_name, " (Groq): ", cleaned)
+	current_response = cleaned
+	dialogue_finished.emit(cleaned)
+
+func _on_groq_request_failed(error: String):
+	print("Groq request failed: ", error)
+	dialogue_finished.emit("[Error: " + error + "]")
+
+# ============ Memory Management ============
 
 func trim_conversation_history():
 	if not enable_memory:
@@ -243,6 +366,8 @@ func get_conversation_summary() -> String:
 func reset_conversation():
 	conversation_history.clear()
 	print(npc_name, " forgot the conversation")
+
+# ============ Response Cleaning ============
 
 func clean_response(text: String) -> String:
 	var cleaned = text
