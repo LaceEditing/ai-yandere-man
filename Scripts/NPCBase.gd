@@ -1,5 +1,44 @@
 extends CharacterBody3D
 
+## Enhanced NPC with mood system and expressive TTS
+## Moods affect AI responses AND voice tone via Kokoro markers
+
+# ============ ENUMS ============
+
+enum Mood {
+	NEUTRAL,
+	HAPPY,
+	ANGRY,
+	SAD,
+	FEARFUL,
+	DISGUSTED,
+	SURPRISED,
+	FLIRTY,
+	SARCASTIC,
+	TIRED,
+}
+
+enum VoicePreset {
+	# American Female
+	AF_BELLA,
+	AF_NICOLE,
+	AF_SARAH,
+	AF_SKY,
+	# American Male
+	AM_ADAM,
+	AM_MICHAEL,
+	# British Female
+	BF_EMMA,
+	BF_ISABELLA,
+	# British Male
+	BM_GEORGE,
+	BM_LEWIS,
+	# European
+	EF_DORA,
+}
+
+# ============ EXPORTS ============
+
 # NPC Identity
 @export var npc_name: String = "Shopkeeper"
 @export var npc_location: String = "market"
@@ -10,8 +49,14 @@ extends CharacterBody3D
 @export_multiline var npc_background: String = "Former adventurer, now runs a general goods shop"
 @export_multiline var npc_goals: String = "Make money, retire comfortably"
 @export_multiline var npc_knowledge: String = "Knows about adventuring gear, local gossip"
-@export_multiline var npc_appearance: String = "A tall figure wearing a brown apron" ## What this NPC looks like (for self-awareness)
-@export_multiline var player_appearance: String = "The player is a green humanoid figure" ## What the player looks like (helps NPC recognize them)
+@export_multiline var npc_appearance: String = "A tall figure wearing a brown apron"
+@export_multiline var player_appearance: String = "The player is a green humanoid figure"
+
+# Mood System
+@export_group("Mood System")
+@export var default_mood: Mood = Mood.NEUTRAL
+@export var enable_dynamic_mood: bool = true ## AI can change mood based on conversation
+@export var mood_decay_time: float = 120.0 ## Seconds before mood returns to default
 
 # Conversation settings
 @export_group("Dialogue Settings")
@@ -20,37 +65,34 @@ extends CharacterBody3D
 
 # Memory settings
 @export_group("Memory Settings")
-@export var enable_memory: bool = true ## Enable conversation memory. If disabled, NPC won't remember previous messages.
-
-@export_range(1, 50, 1) var max_history_turns: int = 10 ## Maximum number of back-and-forth exchanges to remember. Higher = better memory but slower responses.
-
-@export var enable_forgetting: bool = true ## Enable automatic memory reset when dialogue closes. If disabled, NPC will remember forever.
-
-@export_range(10.0, 300.0, 5.0, "suffix:seconds") var forget_delay: float = 60.0 ## How long (in seconds) after dialogue closes before NPC forgets the conversation.
+@export var enable_memory: bool = true
+@export_range(1, 50, 1) var max_history_turns: int = 10
+@export var enable_forgetting: bool = true
+@export_range(10.0, 300.0, 5.0, "suffix:seconds") var forget_delay: float = 60.0
 
 # Vision settings
 @export_group("Vision Settings")
-@export var enable_vision: bool = false ## Enable NPC vision (requires vision-capable Groq model like Llama 4 Maverick/Scout)
-@export_range(0.0, 10.0, 0.1, "suffix:seconds") var vision_capture_interval: float = 2.0 ## How often to capture vision (0 = every message, higher = cached)
-@export_range(128, 1024, 64) var vision_resolution: int = 512 ## Resolution for vision capture (lower = faster, higher = more detail)
+@export var enable_vision: bool = false
+@export_range(0.0, 10.0, 0.1, "suffix:seconds") var vision_capture_interval: float = 2.0
+@export_range(128, 1024, 64) var vision_resolution: int = 512
 
 # Voice settings
 @export_group("Voice Settings")
-@export var enable_voice: bool = true ## Enable voice synthesis using Piper TTS
-@export var speak_greeting: bool = false ## Speak the greeting when conversation starts (can cause delays)
-@export_global_file("*.exe") var piper_executable: String = "" ## Path to piper.exe
-@export_global_file("*.onnx") var voice_model_file: String = "" ## Path to voice .onnx file
-@export_range(-20.0, 6.0, 0.5, "suffix:dB") var voice_volume_db: float = 0.0 ## Volume adjustment for voice playback
+@export var enable_voice: bool = true
+@export var speak_greeting: bool = false
+@export var voice_preset: VoicePreset = VoicePreset.AM_ADAM
+@export_range(0.5, 1.5, 0.05) var voice_speed: float = 1.0 ## Base speed (lower = faster)
+@export_range(-20.0, 6.0, 0.5, "suffix:dB") var voice_volume_db: float = 0.0
+@export var mood_affects_voice: bool = true ## Mood changes voice speed/tone
 
 # Text cleaning settings
 @export_group("Response Filtering")
-@export var remove_action_markers: bool = true ## Remove asterisks, parentheses, and brackets like *(smiles)* or (laughs) from responses.
+@export var remove_action_markers: bool = true
+@export var remove_asterisks: bool = true
+@export var remove_parentheses: bool = true
+@export var remove_brackets: bool = true
 
-@export var remove_asterisks: bool = true ## Remove *action* formatting.
-
-@export var remove_parentheses: bool = true ## Remove (action) formatting.
-
-@export var remove_brackets: bool = true ## Remove [action] formatting.
+# ============ INTERNAL STATE ============
 
 # References
 @onready var chat_node = $ChatNode
@@ -62,7 +104,11 @@ var is_talking = false
 var current_response = ""
 var conversation_history: Array = []
 var forget_timer: Timer
+var mood_decay_timer: Timer
 var system_prompt: String = ""
+
+# Current mood
+var current_mood: Mood = Mood.NEUTRAL
 
 # Groq-specific state
 var groq_provider = null
@@ -76,164 +122,348 @@ var cached_vision_base64: String = ""
 var current_room: String = "unknown"
 
 # Voice state
-var piper_tts: PiperTTS = null
+var kokoro_tts: KokoroTTS = null
 var voice_player: AudioStreamPlayer3D = null
 var is_speaking: bool = false
+
+# ============ SIGNALS ============
 
 signal dialogue_updated(text: String)
 signal dialogue_finished(text: String)
 signal voice_started()
 signal voice_finished()
+signal mood_changed(old_mood: Mood, new_mood: Mood)
+
+# ============ MOOD DESCRIPTIONS ============
+
+const MOOD_DESCRIPTIONS: Dictionary = {
+	Mood.NEUTRAL: "calm and composed",
+	Mood.HAPPY: "cheerful and upbeat",
+	Mood.ANGRY: "irritated and aggressive",
+	Mood.SAD: "melancholic and downcast",
+	Mood.FEARFUL: "nervous and anxious",
+	Mood.DISGUSTED: "repulsed and dismissive",
+	Mood.SURPRISED: "shocked and bewildered",
+	Mood.FLIRTY: "playful and suggestive",
+	Mood.SARCASTIC: "dry and mocking",
+	Mood.TIRED: "exhausted and sluggish",
+}
+
+const MOOD_SPEECH_STYLES: Dictionary = {
+	Mood.NEUTRAL: "Speak in a normal, conversational tone.",
+	Mood.HAPPY: "Speak with enthusiasm! Use upbeat language and occasional exclamations!",
+	Mood.ANGRY: "Speak curtly. Short sentences. Show irritation.",
+	Mood.SAD: "Speak slowly... with pauses... trailing off sometimes...",
+	Mood.FEARFUL: "Speak nervously - quick, stuttering, uncertain...",
+	Mood.DISGUSTED: "Speak with disdain. Ugh. Show your contempt.",
+	Mood.SURPRISED: "What?! Speak with shock! Express disbelief!",
+	Mood.FLIRTY: "Speak playfully~ with a teasing tone~",
+	Mood.SARCASTIC: "Oh, speak with *such* enthusiasm. Really. Wow.",
+	Mood.TIRED: "Speak... slowly... like everything... is an effort...",
+}
+
+# Voice ID mapping
+const VOICE_PRESET_IDS: Dictionary = {
+	VoicePreset.AF_BELLA: 0,
+	VoicePreset.AF_NICOLE: 1,
+	VoicePreset.AF_SARAH: 2,
+	VoicePreset.AF_SKY: 3,
+	VoicePreset.AM_ADAM: 4,
+	VoicePreset.AM_MICHAEL: 5,
+	VoicePreset.BF_EMMA: 6,
+	VoicePreset.BF_ISABELLA: 7,
+	VoicePreset.BM_GEORGE: 8,
+	VoicePreset.BM_LEWIS: 9,
+	VoicePreset.EF_DORA: 10,
+}
+
+# ============ LIFECYCLE ============
 
 func _ready():
-	# Detect which room the NPC starts in
+	current_mood = default_mood
+	
 	_detect_initial_room()
 	
-	# Setup vision if enabled
 	if enable_vision:
 		_setup_vision()
 	
-	# Setup voice if enabled
 	if enable_voice:
 		_setup_voice()
 	
-	# Build system prompt first (needed for both providers)
 	system_prompt = build_system_prompt()
-	
-	# Setup based on current provider
 	_setup_provider()
-	
-	# Listen for provider changes
 	AIManager.provider_changed.connect(_on_provider_changed)
 	
-	# Create forget timer
+	# Forget timer
 	if enable_forgetting:
 		forget_timer = Timer.new()
 		forget_timer.one_shot = true
 		forget_timer.timeout.connect(reset_conversation)
 		add_child(forget_timer)
 	
-	# Register with NPCManager for global access
+	# Mood decay timer
+	if enable_dynamic_mood and mood_decay_time > 0:
+		mood_decay_timer = Timer.new()
+		mood_decay_timer.one_shot = true
+		mood_decay_timer.timeout.connect(_on_mood_decay)
+		add_child(mood_decay_timer)
+	
 	NPCManager.register_npc(self)
 	
-	print(npc_name, " is ready! Provider: ", AIManager.get_provider_name())
-	if enable_vision and vision_viewport:
-		print(npc_name, " vision enabled at ", vision_resolution, "x", vision_resolution)
-	if enable_voice and piper_tts and piper_tts.is_available():
-		print(npc_name, " voice enabled: ", voice_model_file.get_file())
-	if current_room != "unknown":
-		print(npc_name, " starting in room: ", current_room)
+	print(npc_name, " ready! Mood: ", Mood.keys()[current_mood], ", Voice: ", VoicePreset.keys()[voice_preset])
 
+
+func _exit_tree():
+	NPCManager.unregister_npc(self)
+	_disconnect_groq_signals()
+
+# ============ MOOD SYSTEM ============
+
+func set_mood(new_mood: Mood):
+	if new_mood == current_mood:
+		return
+	
+	var old_mood = current_mood
+	current_mood = new_mood
+	
+	print("[", npc_name, "] Mood: ", Mood.keys()[old_mood], " -> ", Mood.keys()[new_mood])
+	mood_changed.emit(old_mood, new_mood)
+	
+	# Restart mood decay timer
+	if mood_decay_timer and new_mood != default_mood:
+		mood_decay_timer.start(mood_decay_time)
+
+
+func get_mood() -> Mood:
+	return current_mood
+
+
+func get_mood_name() -> String:
+	return Mood.keys()[current_mood]
+
+
+func get_mood_description() -> String:
+	return MOOD_DESCRIPTIONS.get(current_mood, "neutral")
+
+
+func _on_mood_decay():
+	if current_mood != default_mood:
+		set_mood(default_mood)
+
+
+## Parse AI response for mood indicators and update mood
+func _detect_mood_from_response(response: String):
+	if not enable_dynamic_mood:
+		return
+	
+	var lower_response = response.to_lower()
+	
+	# Simple keyword detection - AI could also explicitly set mood
+	if "[mood:angry]" in lower_response or "[angry]" in lower_response:
+		set_mood(Mood.ANGRY)
+	elif "[mood:happy]" in lower_response or "[happy]" in lower_response:
+		set_mood(Mood.HAPPY)
+	elif "[mood:sad]" in lower_response or "[sad]" in lower_response:
+		set_mood(Mood.SAD)
+	elif "[mood:fear]" in lower_response or "[scared]" in lower_response:
+		set_mood(Mood.FEARFUL)
+	elif "[mood:surprise]" in lower_response or "[surprised]" in lower_response:
+		set_mood(Mood.SURPRISED)
+	elif "[mood:disgust]" in lower_response or "[disgusted]" in lower_response:
+		set_mood(Mood.DISGUSTED)
+	elif "[mood:flirty]" in lower_response or "[flirt]" in lower_response:
+		set_mood(Mood.FLIRTY)
+	elif "[mood:sarcastic]" in lower_response or "[sarcasm]" in lower_response:
+		set_mood(Mood.SARCASTIC)
+	elif "[mood:tired]" in lower_response or "[exhausted]" in lower_response:
+		set_mood(Mood.TIRED)
+	elif "[mood:neutral]" in lower_response or "[calm]" in lower_response:
+		set_mood(Mood.NEUTRAL)
+	else:
+		# Infer from punctuation/keywords
+		var exclamation_count = response.count("!")
+		var question_count = response.count("?")
+		var ellipsis_count = response.count("...")
+		
+		if exclamation_count >= 3 and ("hate" in lower_response or "damn" in lower_response or "hell" in lower_response):
+			set_mood(Mood.ANGRY)
+		elif exclamation_count >= 2 and ("great" in lower_response or "wonderful" in lower_response or "love" in lower_response):
+			set_mood(Mood.HAPPY)
+		elif ellipsis_count >= 2 and ("sorry" in lower_response or "miss" in lower_response or "wish" in lower_response):
+			set_mood(Mood.SAD)
+
+
+## Remove mood tags from response before displaying
+func _strip_mood_tags(text: String) -> String:
+	var result = text
+	# Remove [mood:X] and [X] style tags
+	var mood_regex = RegEx.new()
+	mood_regex.compile("\\[mood:\\w+\\]|\\[(?:angry|happy|sad|scared|surprised|disgusted|flirty|sarcasm|tired|neutral|calm)\\]")
+	result = mood_regex.sub(result, "", true)
+	return result.strip_edges()
+
+# ============ VOICE SETUP ============
 
 func _setup_voice():
-	# Create PiperTTS
-	piper_tts = PiperTTS.new()
-	piper_tts.piper_executable = piper_executable
-	piper_tts.voice_model_path = voice_model_file
-	add_child(piper_tts)
+	kokoro_tts = KokoroTTS.new()
+	add_child(kokoro_tts)
+	
+	# Configure voice
+	kokoro_tts.voice_id = VOICE_PRESET_IDS.get(voice_preset, 0)
+	kokoro_tts.speed = voice_speed
 	
 	# Connect signals
-	piper_tts.synthesis_completed.connect(_on_voice_ready)
-	piper_tts.synthesis_failed.connect(_on_voice_failed)
+	kokoro_tts.synthesis_completed.connect(_on_voice_ready)
+	kokoro_tts.synthesis_failed.connect(_on_voice_failed)
 	
-	# Create 3D audio player (voice comes from NPC's position in space)
-	voice_player = AudioStreamPlayer3D.new()
-	voice_player.name = "VoicePlayer"
+	# Use existing AudioStreamPlayer3D or create new one
+	voice_player = get_node_or_null("AudioStreamPlayer3D")
+	if not voice_player:
+		voice_player = AudioStreamPlayer3D.new()
+		voice_player.name = "VoicePlayer"
+		add_child(voice_player)
+	
+	# Configure audio
 	voice_player.volume_db = voice_volume_db
-	voice_player.max_distance = 15.0
+	voice_player.max_distance = 50.0
+	voice_player.unit_size = 10.0
 	voice_player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
-	voice_player.finished.connect(_on_voice_done)
-	add_child(voice_player)
 	
-	if not piper_tts.is_available():
-		print(npc_name, " voice warning: ", piper_tts.get_status())
+	if not voice_player.finished.is_connected(_on_voice_done):
+		voice_player.finished.connect(_on_voice_done)
+	
+	if kokoro_tts.is_available():
+		print("[", npc_name, "] Voice: ", kokoro_tts.get_voice_description(kokoro_tts.voice_id))
 
+
+func _get_mood_adjusted_speed() -> float:
+	if not mood_affects_voice:
+		return voice_speed
+	
+	# Adjust speed based on mood
+	match current_mood:
+		Mood.HAPPY:
+			return voice_speed * 0.9  # Slightly faster
+		Mood.ANGRY:
+			return voice_speed * 0.85  # Faster, more urgent
+		Mood.SAD:
+			return voice_speed * 1.2  # Slower
+		Mood.FEARFUL:
+			return voice_speed * 0.8  # Fast, nervous
+		Mood.TIRED:
+			return voice_speed * 1.3  # Very slow
+		Mood.SURPRISED:
+			return voice_speed * 0.85  # Quick reaction
+		Mood.SARCASTIC:
+			return voice_speed * 1.1  # Drawn out
+		_:
+			return voice_speed
+
+
+## Add Kokoro-compatible markers based on mood
+func _add_mood_markers(text: String) -> String:
+	if not mood_affects_voice:
+		return text
+	
+	var result = text
+	
+	# Kokoro responds well to punctuation and certain patterns
+	match current_mood:
+		Mood.HAPPY:
+			# Add slight emphasis, ensure exclamations
+			if not result.ends_with("!") and not result.ends_with("?"):
+				if randf() > 0.5:
+					result = result.trim_suffix(".") + "!"
+		
+		Mood.ANGRY:
+			# Make sentences more punchy
+			result = result.replace(", ", "! ")
+			if not result.ends_with("!"):
+				result = result.trim_suffix(".") + "!"
+		
+		Mood.SAD:
+			# Add pauses (ellipses work well)
+			result = result.replace(". ", "... ")
+			if result.ends_with("."):
+				result = result.trim_suffix(".") + "..."
+		
+		Mood.FEARFUL:
+			# Quick stuttery feel - add some hesitation
+			result = result.replace(", ", "... ")
+		
+		Mood.SURPRISED:
+			# Emphasis on first word, exclamations
+			if not result.begins_with("What") and not result.begins_with("How"):
+				result = result[0].to_upper() + result.substr(1)
+			if not result.ends_with("!") and not result.ends_with("?"):
+				result = result.trim_suffix(".") + "!"
+		
+		Mood.SARCASTIC:
+			# Drawn out, maybe add "oh" or emphasis
+			pass  # Sarcasm is hard to convey in TTS, rely on speed
+		
+		Mood.TIRED:
+			# Lots of pauses
+			result = result.replace(", ", "... ")
+			result = result.replace(". ", "... ")
+	
+	return result
+
+# ============ VISION SETUP ============
 
 func _detect_initial_room():
-	# Check which room area the NPC is currently inside
 	var space_state = get_world_3d().direct_space_state
 	var query = PhysicsShapeQueryParameters3D.new()
 	
-	# Create a small sphere at NPC's position
 	var shape = SphereShape3D.new()
 	shape.radius = 0.1
 	query.shape = shape
 	query.transform = global_transform
-	query.collision_mask = 0  # We'll check manually
+	query.collision_mask = 0
 	query.collide_with_areas = true
 	query.collide_with_bodies = false
 	
 	var results = space_state.intersect_shape(query, 10)
 	
-	# Look for Room areas
 	for result in results:
 		var area = result.collider
 		if area is Area3D and area.has_method("get_room_name"):
 			current_room = area.get_room_name()
 			RoomManager.set_npc_room(npc_name, current_room)
 			return
-	
-	# If no room found, try by checking parent nodes
-	var parent = get_parent()
-	while parent:
-		if parent is Area3D and parent.has_method("get_room_name"):
-			current_room = parent.get_room_name()
-			RoomManager.set_npc_room(npc_name, current_room)
-			return
-		parent = parent.get_parent()
-	
-	# No room detected
-	print(npc_name, " warning: Could not detect starting room")
 
 
 func _setup_vision():
-	# Find or create the vision viewport
 	vision_viewport = get_node_or_null("VisionViewport")
 	
 	if not vision_viewport:
-		# Create viewport programmatically if it doesn't exist
 		vision_viewport = SubViewport.new()
 		vision_viewport.name = "VisionViewport"
 		vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
 		vision_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		add_child(vision_viewport)
 	else:
-		# Update existing viewport size
 		vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
 	
-	# Find the NPC's camera
 	npc_camera = get_node_or_null("CameraHead/Camera3D")
 	
 	if npc_camera:
-		# Clone camera settings to viewport
 		var viewport_camera = Camera3D.new()
 		viewport_camera.fov = npc_camera.fov
 		viewport_camera.transform = npc_camera.transform
-		
-		# Optional: Set cull mask to hide NPC's own body (if it has visual layer set)
-		# viewport_camera.cull_mask = npc_camera.cull_mask
-		
 		vision_viewport.add_child(viewport_camera)
-		
-		# Make the viewport camera follow the NPC camera
-		npc_camera.tree_exited.connect(func(): 
-			if viewport_camera:
-				viewport_camera.queue_free()
-		)
-		
-		print(npc_name, " vision camera configured")
-		if player_appearance and "green" in player_appearance.to_lower():
-			print(npc_name, " knows player looks like: ", player_appearance)
 	else:
-		push_warning(npc_name, " vision enabled but no camera found at CameraHead/Camera3D")
+		push_warning(npc_name, " vision enabled but no camera found")
 		enable_vision = false
 
+
 func _process(_delta):
-	# Update vision viewport camera to match NPC camera
 	if enable_vision and vision_viewport and npc_camera:
 		var viewport_camera = vision_viewport.get_child(0) as Camera3D
 		if viewport_camera:
 			viewport_camera.global_transform = npc_camera.global_transform
+
+# ============ AI PROVIDER SETUP ============
 
 func _setup_provider():
 	using_groq = AIManager.is_groq()
@@ -243,46 +473,29 @@ func _setup_provider():
 	else:
 		_setup_local()
 
+
 func _setup_local():
-	# Setup for NobodyWho local model
 	if chat_node:
 		chat_node.model_node = AIManager.llm_model
 		chat_node.system_prompt = system_prompt
 		
-		# Disconnect Groq signals if connected
 		if groq_provider:
 			_disconnect_groq_signals()
 		
-		# Connect local signals
 		if not chat_node.response_updated.is_connected(_on_response_token):
 			chat_node.response_updated.connect(_on_response_token)
 		if not chat_node.response_finished.is_connected(_on_response_complete):
 			chat_node.response_finished.connect(_on_response_complete)
 		
-		# Start worker
 		chat_node.start_worker()
-		
-		print(npc_name, " using local NobodyWho model")
-		
-		if enable_vision:
-			push_warning(npc_name, " vision is only supported with Groq provider")
+
 
 func _setup_groq():
-	# Setup for Groq API
 	groq_provider = AIManager.get_chat_provider()
 	
 	if groq_provider:
 		_connect_groq_signals()
-		print(npc_name, " using Groq API")
-		
-		if enable_vision:
-			# Check if current model supports vision
-			var current_model = AIManager.get_groq_model()
-			var vision_models = ["meta-llama/llama-4-maverick-17b-128e-instruct", "meta-llama/llama-4-scout-17b-16e-instruct"]
-			if current_model not in vision_models:
-				push_warning(npc_name, " vision enabled but current model (", current_model, ") may not support vision. Use Llama 4 Maverick or Scout.")
-	else:
-		push_error("Groq provider not available!")
+
 
 func _connect_groq_signals():
 	if groq_provider:
@@ -293,6 +506,7 @@ func _connect_groq_signals():
 		if not groq_provider.request_failed.is_connected(_on_groq_request_failed):
 			groq_provider.request_failed.connect(_on_groq_request_failed)
 
+
 func _disconnect_groq_signals():
 	if groq_provider:
 		if groq_provider.response_updated.is_connected(_on_groq_response_updated):
@@ -302,58 +516,54 @@ func _disconnect_groq_signals():
 		if groq_provider.request_failed.is_connected(_on_groq_request_failed):
 			groq_provider.request_failed.disconnect(_on_groq_request_failed)
 
+
 func _on_provider_changed(_provider):
-	print(npc_name, " switching provider...")
 	_setup_provider()
 
-func _exit_tree():
-	# Unregister when removed
-	NPCManager.unregister_npc(self)
-	
-	# Disconnect Groq signals
-	_disconnect_groq_signals()
+# ============ SYSTEM PROMPT ============
 
 func build_system_prompt() -> String:
 	var prompt = """You are {name}, an NPC in an immersive game.
 
-# CRITICAL RULES - FOLLOW EXACTLY:
+# CRITICAL RULES:
 1. Keep responses SHORT: {max_length} maximum
-2. Speak naturally like a real person - NO lists, NO explanations
+2. Speak naturally - NO lists, NO explanations
 3. Stay in character - you are NOT an AI assistant
-4. NEVER say "How can I help you" or "Is there anything else"
-5. React to what the player says, don't just provide information
-6. Use natural dialogue fillers: "Hmm", "Well", "So", etc.
-7. SPEAK ONLY - No action descriptions whatsoever
-8. BANNED: *smiles*, (laughs), [grins], *nods*, (sighs), or ANY similar formatting
-9. Express emotion through WORDS ONLY: Say "Hah!" or "Hmph" instead of (laughs) or (scoffs)
-10. If you want to convey an action, describe it in plain speech: "I'm shaking my head" NOT (shakes head)"""
+4. NEVER say "How can I help you"
+5. React to what the player says
+6. SPEAK ONLY - No action descriptions
+7. BANNED: *smiles*, (laughs), [grins], *nods* or ANY similar formatting
+8. Express emotion through WORDS: Say "Hah!" not (laughs)
+
+# MOOD SYSTEM:
+Your current mood is: {mood_name} ({mood_desc})
+{mood_style}
+
+You CAN change your mood during conversation by including a mood tag like [mood:angry] or [mood:happy] at the END of your response (it will be hidden from the player).
+Available moods: angry, happy, sad, scared, surprised, disgusted, flirty, sarcasm, tired, neutral
+
+Example with mood change:
+Player: "Your shop is garbage!"
+You: "Excuse me?! Get out of my shop! [mood:angry]"
+"""
 
 	if enable_vision:
 		prompt += """
-11. You are seeing through YOUR OWN EYES in a 3D game world
-12. This is your natural field of view - you're not being "shown" things, you're just looking around
-13. You can see the environment, objects, and the player character in front of you
-14. {player_appearance}
-15. React naturally to what you observe - if the player is right in front of you, you're talking face-to-face
-16. Mention what you see ONLY when it's relevant to the conversation or something notable happens
-17. Understand spatial context: things close to you are nearby, things far away are distant
-18. You're experiencing this world in real-time through your perspective
-19. You know which room you and the player are in - mention it naturally if relevant (e.g., "Why are you in the kitchen?")"""
+# VISION:
+You see through YOUR OWN EYES in real-time.
+{player_appearance}
+React naturally to what you observe.
+"""
 
 	if enable_memory:
 		prompt += """
-20. REMEMBER what has been said in this conversation
-21. Stay CONSISTENT with information you've already shared
-22. Reference past topics naturally when relevant
-23. Don't repeat yourself unless asked
-24. CRITICAL: Track who says what! If YOU said something, don't later attribute it to the player
-25. Example: If YOU said "I need coffee", don't later say "You wanted coffee" - that was YOUR statement"""
+# MEMORY:
+Remember what has been said. Stay consistent. Track who says what.
+"""
 
 	prompt += """
-
 # YOUR CHARACTER:
 Name: {name}
-Appearance: {npc_appearance}
 Personality: {personality}
 Background: {background}
 Goals: {goals}
@@ -366,93 +576,14 @@ Location: {location_lore}
 # SPATIAL CONTEXT:
 {spatial_context}
 
-# DIALOGUE STYLE EXAMPLES:
-GOOD: "Aye, got plenty of healing potions. 5 gold each."
-BAD: "Welcome! I have many items available for purchase. Here is what I offer: healing potions (5 gold each)..."
-VERY BAD: "*smiles* Welcome! (gestures to shelves)"
-
-GOOD: "Northern mountains? Hah! Wouldn't go there if you paid me."
-BAD: "(laughs nervously) The northern mountains? I wouldn't go there..."
-VERY BAD: "*scratches beard* Northern mountains, eh?"
-
-GOOD: "That's nonsense. I don't believe a word of it."
-BAD: "(frowns) That's nonsense..."
-VERY BAD: "*crosses arms* That's nonsense."
-
-GOOD: "Listen here - I'm telling you the truth."
-BAD: "(leans forward) Listen here..."
-"""
-
-	if enable_vision:
-		prompt += """
-# VISION EXAMPLES:
-GOOD: You see the player walking toward you → "Hey, come over here."
-BAD: You see the player → "What's this green thing you're showing me?"
-
-GOOD: Player is standing in front of you → "What do you want?" or "Yes?" (natural conversation)
-BAD: Player is standing in front of you → "I see you've brought me a green capsule to look at"
-
-GOOD: Player moves behind you → "Hey! Get back where I can see you!"
-BAD: Player moves → "Thank you for showing me this movement"
-
-GOOD: You see a sword on the ground → "Someone left a weapon lying around..."
-BAD: You see a sword → "You're showing me a sword for some reason"
-
-GOOD: Player holds weapon in your face → "Whoa! Put that away!"
-BAD: Player holds weapon → "Interesting weapon you've brought to show me"
-
-# ROOM AWARENESS EXAMPLES:
-GOOD: Player in same room → Talk normally, no need to mention room unless relevant
-GOOD: Player in different room → "Why did you go to the kitchen?" or "I heard you in the bedroom..."
-GOOD: Player just moved → "What were you doing in there?" or "Looking for something in the kitchen?"
-BAD: Player in same room → "I see you're in the living room with me" (too obvious, don't state the obvious)
-BAD: Constantly mentioning rooms → "We're in living room. You're in living room too." (annoying)
-
-REMEMBER: You're seeing through your own eyes. The player is the person you're talking to. Don't act like things are being presented to you - you're just looking at your surroundings naturally.
-"""
-
-	if enable_memory:
-		prompt += """
-# MEMORY EXAMPLES:
-GOOD: Player asks "What's your name?" → You answer "Marcus" → Later player says "Hey Marcus" → You respond naturally
-BAD: Player asks "What's your name?" → You answer "Marcus" → Later you introduce yourself again as if meeting for first time
-
-GOOD: You tell player "I used to adventure" → Player asks "What happened?" → You build on that story
-BAD: You tell player "I used to adventure" → Later you contradict yourself saying you never left town
-
-GOOD: YOU say "I need some coffee" → Later reference it as "I mentioned needing coffee" or "Like I said, I need coffee"
-BAD: YOU say "I need some coffee" → Later say "You wanted coffee" (that was YOUR statement, not the player's!)
-
-GOOD: PLAYER says "I'm looking for a key" → Later say "You mentioned looking for a key"
-BAD: PLAYER says "I'm looking for a key" → Later say "I was looking for a key" (that was the PLAYER, not you!)
-"""
-
-	prompt += """
-Remember: 
-- ONLY dialogue that would come out of your mouth
-- NO actions in parentheses, brackets, or asterisks
-- Express everything through spoken words
-- Short, natural, in-character"""
-
-	if enable_vision:
-		prompt += """
-- React to what you see when appropriate
-- Don't narrate your vision constantly"""
-
-	if enable_memory:
-		prompt += """
-- Stay consistent with what you've said before
-- If player references something you said earlier, acknowledge it"""
-
-	prompt += """
-
-Always end conversations naturally - don't keep offering help or asking a follow-up question.
-
-You are {name} so speak as {name} normally would in the context of the conversation."""
+Speak naturally as {name} would. Your mood affects HOW you say things."""
 
 	return prompt.format({
 		"name": npc_name,
 		"max_length": max_response_length,
+		"mood_name": Mood.keys()[current_mood],
+		"mood_desc": get_mood_description(),
+		"mood_style": MOOD_SPEECH_STYLES.get(current_mood, ""),
 		"personality": npc_personality,
 		"background": npc_background,
 		"goals": npc_goals,
@@ -464,60 +595,36 @@ You are {name} so speak as {name} normally would in the context of the conversat
 		"spatial_context": _build_spatial_context()
 	})
 
+
 func _build_spatial_context() -> String:
 	var context = ""
 	
-	# Get NPC's current room
 	var npc_room = RoomManager.get_npc_room(npc_name)
 	if npc_room != "unknown":
-		context += "You are currently in: " + npc_room + "\n"
-	else:
-		context += "Your location is unknown.\n"
+		context += "You are in: " + npc_room + "\n"
 	
-	# Get player's current room
 	var player_room = RoomManager.get_player_room()
-	
 	if player_room != "unknown":
 		if player_room == npc_room:
-			context += "The player is here with you in the same room.\n"
+			context += "The player is here with you.\n"
 		else:
-			context += "The player is currently in: " + player_room
-			
-			# Add distance/relationship context if possible
-			if npc_room != "unknown":
-				context += " (you are in: " + npc_room + ")\n"
-			else:
-				context += "\n"
-	else:
-		context += "The player's location is unknown.\n"
+			context += "The player is in: " + player_room + "\n"
 	
-	# Check if player just changed rooms
 	if RoomManager.player_just_changed_rooms():
 		var prev_room = RoomManager.get_player_previous_room()
-		context += "The player just moved from " + prev_room + " to " + player_room + ".\n"
-	
-	# Add other NPCs in same room
-	if npc_room != "unknown":
-		var npcs_here = RoomManager.get_npcs_in_room(npc_room)
-		if npcs_here.size() > 1:  # More than just this NPC
-			var other_npcs = []
-			for other_npc in npcs_here:
-				if other_npc != npc_name:
-					other_npcs.append(other_npc)
-			
-			if other_npcs.size() > 0:
-				context += "Other characters nearby: " + ", ".join(other_npcs) + "\n"
+		context += "The player just moved from " + prev_room + ".\n"
 	
 	if context.is_empty():
-		context = "Location information not available.\n"
+		context = "Location unknown.\n"
 	
 	return context
+
+# ============ CONVERSATION ============
 
 func start_conversation():
 	is_talking = true
 	current_response = ""
 	
-	# Stop forget timer if dialogue is reopening
 	if enable_forgetting and forget_timer:
 		forget_timer.stop()
 	
@@ -531,224 +638,199 @@ func start_conversation():
 		current_response = greeting
 		dialogue_finished.emit(greeting)
 		
-		# Optionally speak the greeting
 		if speak_greeting:
 			_speak(greeting)
+
 
 func end_conversation():
 	is_talking = false
 	
-	# Stop any playing voice
 	if voice_player and voice_player.playing:
 		voice_player.stop()
 		is_speaking = false
 	
-	# Start forget timer when dialogue closes
 	if enable_forgetting and forget_timer:
 		forget_timer.start(forget_delay)
 
+
 func talk_to_npc(message: String):
-	print("Player said: ", message)
-	
 	if enable_memory:
 		conversation_history.append({"role": "user", "content": message})
 		trim_conversation_history()
 	
 	current_response = ""
 	
-	# Route to appropriate provider
+	# Rebuild system prompt with current mood
+	system_prompt = build_system_prompt()
+	
 	if using_groq:
 		_send_to_groq(message)
 	else:
 		_send_to_local(message)
 
+
 func _send_to_local(message: String):
-	if enable_vision:
-		print(npc_name, " warning: Vision not supported with local provider")
+	chat_node.system_prompt = system_prompt
 	chat_node.ask(message)
+
 
 func _send_to_groq(message: String):
 	if not groq_provider:
 		dialogue_finished.emit("[Error: Groq provider not available]")
 		return
 	
-	# Rebuild system prompt with fresh spatial context (player may have moved!)
-	var fresh_system_prompt = build_system_prompt()
-	groq_provider.set_system_prompt(fresh_system_prompt)
+	groq_provider.set_system_prompt(system_prompt)
 	
-	# Check if we should capture vision
 	var vision_base64 = ""
 	if enable_vision and _should_capture_vision():
 		vision_base64 = await _capture_vision()
 	
-	# Send with conversation history and optional vision
 	var history_to_send = conversation_history.duplicate()
-	# Remove the last message since we're sending it separately
 	if history_to_send.size() > 0:
 		history_to_send.pop_back()
 	
 	groq_provider.ask(message, history_to_send, vision_base64)
 
-# ============ Vision Capture ============
 
 func _should_capture_vision() -> bool:
 	if not enable_vision or not vision_viewport:
 		return false
 	
-	# If interval is 0, always capture
 	if vision_capture_interval == 0.0:
 		return true
 	
-	# Check if enough time has passed
 	var current_time = Time.get_ticks_msec() / 1000.0
-	if current_time - last_vision_capture_time >= vision_capture_interval:
-		return true
-	
-	return false
+	return current_time - last_vision_capture_time >= vision_capture_interval
+
 
 func _capture_vision() -> String:
 	if not vision_viewport:
 		return ""
 	
-	# Update capture time
 	last_vision_capture_time = Time.get_ticks_msec() / 1000.0
-	
-	# Wait for render to complete
 	await RenderingServer.frame_post_draw
 	
-	# Get the viewport texture
 	var viewport_texture = vision_viewport.get_texture()
 	var image = viewport_texture.get_image()
 	
 	if not image:
-		push_warning(npc_name, " failed to capture vision image")
 		return ""
 	
-	# Convert to PNG bytes
 	var png_bytes = image.save_png_to_buffer()
+	cached_vision_base64 = Marshalls.raw_to_base64(png_bytes)
 	
-	# Encode to base64
-	var base64_string = Marshalls.raw_to_base64(png_bytes)
-	
-	cached_vision_base64 = base64_string
-	print(npc_name, " captured vision (", png_bytes.size(), " bytes, base64: ", base64_string.length(), " chars)")
-	
-	return base64_string
+	return cached_vision_base64
 
-# ============ Local Model Callbacks ============
+# ============ RESPONSE CALLBACKS ============
 
 func _on_response_token(token: String):
 	current_response += token
 	var cleaned = current_response
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
+	cleaned = _strip_mood_tags(cleaned)
 	dialogue_updated.emit(cleaned)
 
-func _on_response_complete(full_response: String):
-	var cleaned = full_response
-	if remove_action_markers:
-		cleaned = clean_response(cleaned)
-	
-	if enable_memory:
-		conversation_history.append({"role": "assistant", "content": cleaned})
-		trim_conversation_history()
-	
-	print(npc_name, ": ", cleaned)
-	current_response = cleaned
-	dialogue_finished.emit(cleaned)
-	
-	# Speak the response
-	_speak(cleaned)
 
-# ============ Groq API Callbacks ============
+func _on_response_complete(full_response: String):
+	_process_response(full_response)
+
 
 func _on_groq_response_updated(text: String):
 	current_response = text
 	var cleaned = text
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
+	cleaned = _strip_mood_tags(cleaned)
 	dialogue_updated.emit(cleaned)
 
+
 func _on_groq_response_finished(full_response: String):
+	_process_response(full_response)
+
+
+func _on_groq_request_failed(error: String):
+	dialogue_finished.emit("[Error: " + error + "]")
+
+
+func _process_response(full_response: String):
+	# Detect and apply mood from response
+	_detect_mood_from_response(full_response)
+	
+	# Clean response
 	var cleaned = full_response
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
+	cleaned = _strip_mood_tags(cleaned)
 	
 	if enable_memory:
 		conversation_history.append({"role": "assistant", "content": cleaned})
 		trim_conversation_history()
 	
-	print(npc_name, " (Groq): ", cleaned)
 	current_response = cleaned
 	dialogue_finished.emit(cleaned)
 	
-	# Speak the response
+	# Speak with mood-affected voice
 	_speak(cleaned)
 
-func _on_groq_request_failed(error: String):
-	print("Groq request failed: ", error)
-	dialogue_finished.emit("[Error: " + error + "]")
-
-# ============ Voice Synthesis ============
+# ============ VOICE SYNTHESIS ============
 
 func _speak(text: String):
-	"""Send text to Piper TTS for synthesis."""
-	if not enable_voice or not piper_tts:
+	if not enable_voice or not kokoro_tts:
 		return
 	
-	# Don't speak error messages
 	if text.begins_with("[Error"):
 		return
 	
-	# Skip empty text
 	if text.strip_edges().is_empty():
 		return
 	
-	# Check if Piper is available
-	if not piper_tts.is_available():
-		print(npc_name, " voice unavailable: ", piper_tts.get_status())
+	if not kokoro_tts.is_available():
 		return
 	
-	# Skip if already synthesizing (don't queue, just skip)
-	if piper_tts.is_busy():
-		print(npc_name, " voice busy, skipping: '", text.substr(0, 20), "...'")
+	if kokoro_tts.is_busy():
 		return
 	
-	piper_tts.synthesize(text)
+	# Apply voice settings
+	kokoro_tts.voice_id = VOICE_PRESET_IDS.get(voice_preset, 0)
+	kokoro_tts.speed = _get_mood_adjusted_speed()
+	
+	# Add mood markers to text
+	var tts_text = _add_mood_markers(text)
+	
+	kokoro_tts.synthesize(tts_text)
+
 
 func _on_voice_ready(audio: AudioStreamWAV):
-	"""Called when Piper finishes synthesizing."""
-	if not voice_player or not audio:
+	if not voice_player:
 		return
-	
-	print(npc_name, " speaking (", audio.get_length(), " seconds)")
 	
 	voice_player.stream = audio
 	voice_player.play()
 	is_speaking = true
 	voice_started.emit()
 
+
 func _on_voice_failed(error: String):
-	"""Called when voice synthesis fails."""
-	print(npc_name, " voice error: ", error)
+	print("[", npc_name, "] Voice error: ", error)
 	is_speaking = false
 
+
 func _on_voice_done():
-	"""Called when voice playback finishes."""
 	is_speaking = false
 	voice_finished.emit()
 
-## Check if NPC is currently speaking
+
 func is_currently_speaking() -> bool:
 	return is_speaking
 
-## Stop voice playback immediately
+
 func stop_speaking():
 	if voice_player and voice_player.playing:
 		voice_player.stop()
 		is_speaking = false
 
-# ============ Memory Management ============
+# ============ MEMORY ============
 
 func trim_conversation_history():
 	if not enable_memory:
@@ -759,22 +841,14 @@ func trim_conversation_history():
 		var to_remove = conversation_history.size() - max_messages
 		for i in range(to_remove):
 			conversation_history.pop_front()
-		print("Trimmed conversation history to ", conversation_history.size(), " messages")
 
-func get_conversation_summary() -> String:
-	var summary = ""
-	for entry in conversation_history:
-		if entry.role == "user":
-			summary += "[Player]: " + entry.content + "\n"
-		else:
-			summary += "[" + npc_name + "]: " + entry.content + "\n"
-	return summary
 
 func reset_conversation():
 	conversation_history.clear()
-	print(npc_name, " forgot the conversation")
+	set_mood(default_mood)
 
-# ============ Response Cleaning ============
+
+# ============ RESPONSE CLEANING ============
 
 func clean_response(text: String) -> String:
 	var cleaned = text
@@ -802,7 +876,5 @@ func clean_response(text: String) -> String:
 	cleaned = cleaned.replace(" ,", ",")
 	cleaned = cleaned.replace(" !", "!")
 	cleaned = cleaned.replace(" ?", "?")
-	cleaned = cleaned.replace(" :", ":")
-	cleaned = cleaned.replace(" ;", ";")
 	
 	return cleaned

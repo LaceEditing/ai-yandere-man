@@ -1,0 +1,28 @@
+Fix issue where the NPC's spoken text gets cut off if the delay to hide the UI is done before the audio finishes output
+	likely solution: making it so the countdown delay doesn't begin until 3 seconds after both the text and audio output are finished.
+
+Clean up UI for dialogue slightly so that the text doesn't begin the typewriter effect until the audio starts.
+	likely solution: put a "Thinking..." text in the spot where the output is read until the audio begins, then start typewriter effect once the audio starts.
+
+Figure out if the KokoroTTS system is able to use emotion tags similar to Elevenlabs and Chatterbox where the text could have a prefix text to determine the emphasis that is read out loud
+	potential solution: find some way to believably read audio out loud rather than it sounding like an emotionless run-on sentence all the time.
+
+Fix up dynamic mood system so that it isn't a simple cooldown but rather is inclined to change accurately based on what happens in-game.
+
+Replace the default greeting that is still in the code with one more like AI2U where a generated output greeting is created based on the NPC's info and then displayed/spoken when the game starts automatically as if the user had already inputted dialogue.
+
+Give the player the ability to name their character as well as the AI's character when the game starts.
+
+Add some debug options so I can see the conversation history and better understand what the AI is doing.
+
+=================================================================================================================================
+
+Long-Term TODOS:
+
+Let the NPC walk around the space, dynamically choosing where to go based on what's being said, what it sees with its vision, among other variables like the mood they're in and whatnot.
+
+Actually create 3D objects in the room that can be interacted with by both the player and the NPC.
+
+Actually establish a win/lose condition set and create a basic prototype implementation.
+
+Improve AI output so it doesn't sound so much like a robot playing a role, and more like a real person.
