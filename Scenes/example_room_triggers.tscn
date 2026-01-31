@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://d1chj566hlcd" path="res://Scripts/Room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://bumo05wek6sx3" path="res://Scenes/character.tscn" id="2_m6lvx"]
 [ext_resource type="PackedScene" uid="uid://bs2jm62cmkbrk" path="res://addons/instant-realistic-light/light_scene.tscn" id="3_l3p17"]
+[ext_resource type="Texture2D" uid="uid://dhgi5i3owk7ld" path="res://Textures/HDRIs/kloofendal_48d_partly_cloudy_puresky_4k.exr" id="4_f6wdd"]
 [ext_resource type="PackedScene" uid="uid://5j3g3jx65e7m" path="res://Scenes/npc_base.tscn" id="4_kakeu"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_living_trigger"]
@@ -57,27 +58,46 @@ size = Vector3(12, 0.2, 3)
 [sub_resource type="BoxShape3D" id="BoxShape3D_hallway_floor"]
 size = Vector3(12, 0.2, 3)
 
-[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_gn88m"]
-ground_color = Color(0, 0, 0, 1)
+[sub_resource type="Shader" id="Shader_7fwq4"]
+code = "
+// NOTE: Shader automatically converted from Godot Engine 4.6.stable's PanoramaSkyMaterial.
+
+shader_type sky;
+
+uniform sampler2D source_panorama : filter_linear, source_color, hint_default_black;
+uniform float exposure : hint_range(0, 128) = 1.0;
+uniform float speed = 0.002;
+
+void sky() {
+	vec2 skyCoords = vec2(SKY_COORDS.x + TIME * speed, SKY_COORDS.y);
+	
+	COLOR = texture(source_panorama, skyCoords).rgb * exposure;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_f36oo"]
+shader = SubResource("Shader_7fwq4")
+shader_parameter/source_panorama = ExtResource("4_f6wdd")
+shader_parameter/exposure = 1.0
+shader_parameter/speed = 0.002
 
 [sub_resource type="Sky" id="Sky_tyhie"]
-sky_material = SubResource("PhysicalSkyMaterial_gn88m")
+sky_material = SubResource("ShaderMaterial_f36oo")
 radiance_size = 2
 
 [sub_resource type="Environment" id="Environment_f8w8m"]
 background_mode = 2
 background_intensity = 100000.0
 sky = SubResource("Sky_tyhie")
-tonemap_mode = 3
-tonemap_white = 8.0
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 4
 ssao_enabled = true
 ssao_detail = 2.0
 sdfgi_enabled = true
 sdfgi_bounce_feedback = 0.9
-glow_enabled = true
 glow_normalized = true
 glow_bloom = 0.2
-volumetric_fog_enabled = true
 volumetric_fog_density = 0.01
 volumetric_fog_gi_inject = 1.14
 volumetric_fog_anisotropy = 0.7

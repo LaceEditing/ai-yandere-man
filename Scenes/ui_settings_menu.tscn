@@ -1,0 +1,147 @@
+[gd_scene load_steps=3 format=3 uid="uid://c8xhh1srl3yk8"]
+
+[ext_resource type="Script" path="res://Scripts/UISettingsMenu.gd" id="1_settings"]
+
+[sub_resource type="Theme" id="Theme_settings"]
+default_font_size = 20
+
+[node name="UISettingsMenu" type="CanvasLayer"]
+layer = 100
+script = ExtResource("1_settings")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.7)
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -250.0
+offset_right = 300.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 30
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme = SubResource("Theme_settings")
+theme_override_font_sizes/font_size = 28
+text = "UI SETTINGS"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ScalingModeLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme = SubResource("Theme_settings")
+text = "Scaling Mode:"
+
+[node name="ScalingModeButtons" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AutoButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ScalingModeButtons"]
+custom_minimum_size = Vector2(130, 40)
+layout_mode = 2
+theme = SubResource("Theme_settings")
+toggle_mode = true
+button_pressed = true
+button_group = null
+text = "Auto"
+
+[node name="ManualButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ScalingModeButtons"]
+custom_minimum_size = Vector2(130, 40)
+layout_mode = 2
+theme = SubResource("Theme_settings")
+toggle_mode = true
+text = "Manual"
+
+[node name="HSeparator2" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ScaleLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme = SubResource("Theme_settings")
+text = "UI Scale: 1.5x (27px)"
+
+[node name="ScaleSlider" type="HSlider" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+min_value = 0.8
+max_value = 2.5
+step = 0.1
+value = 1.5
+
+[node name="PresetButtons" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="SmallButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/PresetButtons"]
+custom_minimum_size = Vector2(80, 35)
+layout_mode = 2
+theme = SubResource("Theme_settings")
+text = "Small"
+
+[node name="MediumButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/PresetButtons"]
+custom_minimum_size = Vector2(90, 35)
+layout_mode = 2
+theme = SubResource("Theme_settings")
+text = "Medium"
+
+[node name="LargeButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/PresetButtons"]
+custom_minimum_size = Vector2(80, 35)
+layout_mode = 2
+theme = SubResource("Theme_settings")
+text = "Large"
+
+[node name="HSeparator3" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="PreviewLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme = SubResource("Theme_settings")
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+text = "Preview: The quick brown fox jumps"
+horizontal_alignment = 1
+
+[node name="HSeparator4" type="HSeparator" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonsContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="ApplyButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
+custom_minimum_size = Vector2(120, 45)
+layout_mode = 2
+theme = SubResource("Theme_settings")
+theme_override_font_sizes/font_size = 22
+text = "Apply"
+
+[node name="CloseButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
+custom_minimum_size = Vector2(120, 45)
+layout_mode = 2
+theme = SubResource("Theme_settings")
+theme_override_font_sizes/font_size = 22
+text = "Close"

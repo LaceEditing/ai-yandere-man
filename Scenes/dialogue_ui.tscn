@@ -1,59 +1,62 @@
-[gd_scene load_steps=3 format=3 uid="uid://b4xhh0srl2yh7"]
+[gd_scene format=3 uid="uid://b4xhh0srl2yh7"]
 
-[ext_resource type="Script" path="res://Scripts/DialogueUI.gd" id="1_dialogue"]
+[ext_resource type="Script" uid="uid://bwbxkic00xvcf" path="res://Scripts/DialogueUI.gd" id="1_dialogue"]
 
 [sub_resource type="Theme" id="Theme_dialogue"]
-default_font_size = 18
+default_font_size = 28
 
-[node name="DialogueUI" type="CanvasLayer"]
+[node name="DialogueUI" type="CanvasLayer" unique_id=1156747975]
 layer = 10
 script = ExtResource("1_dialogue")
+auto_hide_delay = 2.0
 
-[node name="NPCTextContainer" type="PanelContainer" parent="."]
+[node name="NPCTextContainer" type="PanelContainer" parent="." unique_id=1759042652]
 modulate = Color(1, 1, 1, 0.9)
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = -120.0
-offset_right = -20.0
-offset_bottom = -20.0
+offset_left = 40.0
+offset_top = -200.0
+offset_right = -40.0
+offset_bottom = -40.0
 grow_horizontal = 2
 grow_vertical = 0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="NPCTextContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="NPCTextContainer" unique_id=1975012918]
 layout_mode = 2
 
-[node name="NPCNameLabel" type="Label" parent="NPCTextContainer/VBoxContainer"]
+[node name="NPCNameLabel" type="Label" parent="NPCTextContainer/VBoxContainer" unique_id=1372497171]
 layout_mode = 2
 theme = SubResource("Theme_dialogue")
 theme_override_colors/font_color = Color(1, 0.8, 0.4, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 24
 text = "NPC Name"
 
-[node name="DialogueLabel" type="Label" parent="NPCTextContainer/VBoxContainer"]
-custom_minimum_size = Vector2(600, 80)
+[node name="DialogueLabel" type="Label" parent="NPCTextContainer/VBoxContainer" unique_id=1889695177]
+custom_minimum_size = Vector2(800, 120)
 layout_mode = 2
 theme = SubResource("Theme_dialogue")
+theme_override_font_sizes/font_size = 28
 text = "NPC dialogue appears here as they speak..."
 autowrap_mode = 3
 
-[node name="InputPrompt" type="PanelContainer" parent="."]
+[node name="InputPrompt" type="PanelContainer" parent="." unique_id=860728569]
 anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -250.0
-offset_top = -60.0
-offset_right = 250.0
-offset_bottom = -10.0
+offset_left = -400.0
+offset_top = -100.0
+offset_right = 400.0
+offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 0
 
-[node name="InputField" type="LineEdit" parent="InputPrompt"]
+[node name="InputField" type="LineEdit" parent="InputPrompt" unique_id=521322322]
 layout_mode = 2
 theme = SubResource("Theme_dialogue")
+theme_override_font_sizes/font_size = 28
 placeholder_text = "Type or hold V for voice..."
 clear_button_enabled = true

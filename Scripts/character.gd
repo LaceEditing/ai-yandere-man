@@ -26,6 +26,9 @@ func _ready():
 	if gravity == 0.0:
 		gravity = 9.8
 	
+	if UISettingsMenu:
+		UISettingsMenu.load_saved_settings()
+	
 	# Cache the AISettingsMenu reference if it exists
 	ai_settings_menu = get_node_or_null("/root/AISettingsMenu")
 
@@ -49,6 +52,12 @@ func _input(event):
 	if event.is_action_pressed("OpenMenu"):
 		if ai_settings_menu and ai_settings_menu.has_method("show_menu"):
 			ai_settings_menu.show_menu()
+		get_viewport().set_input_as_handled()
+		return
+		
+	# Press U to open UI Settings
+	if event.is_action_pressed("OpenUIMenu"):
+		UISettingsMenu.show_menu()
 		get_viewport().set_input_as_handled()
 		return
 	

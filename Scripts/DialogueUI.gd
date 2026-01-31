@@ -1,7 +1,7 @@
 extends CanvasLayer
 
-## Enhanced Dialogue UI - AI2U Style with Voice Sync
-## Fixes: Voice cutoff, typewriter sync with audio
+## Enhanced Dialogue UI - AI2U Style with Voice Sync + Auto Scaling
+## Fixes: Voice cutoff, typewriter sync with audio, auto-scales to screen resolution
 
 # UI References
 @onready var npc_text_container = $NPCTextContainer
@@ -18,19 +18,29 @@ var is_generating: bool = false
 # Typing effect with voice sync
 var current_text: String = ""
 var display_text: String = ""
-var typing_speed: float = 0.02  # Seconds per character
+@export_range(0.01, 0.1, 0.01, "suffix:seconds") var typing_speed: float = 0.02  ## Speed of typewriter effect (per character)
 var typing_timer: float = 0.0
 var is_typing: bool = false
 var waiting_for_voice: bool = false  # Wait for TTS to start
 
 # Auto-hide timer
-var auto_hide_delay: float = 3.0  # Seconds before text fades
+@export_range(1.0, 10.0, 0.5, "suffix:seconds") var auto_hide_delay: float = 3.0  ## Time before dialogue text fades
 var hide_timer: Timer = null
 
 # Voice input
 var voice_recorder: VoiceRecorder = null
 var is_recording: bool = false
 var stt_provider = null
+
+# UI Scaling
+var current_scale_factor: float = 1.0
+var base_font_size: int = 18
+
+## INSPECTOR ADJUSTABLE SETTINGS ##
+@export_category("UI Scaling")
+@export var enable_auto_scaling: bool = true  ## Auto-scale based on screen resolution
+@export_range(0.5, 3.0, 0.1) var manual_scale_override: float = 1.5  ## Manual scale (used if auto disabled)
+@export var apply_scale_on_ready: bool = true  ## Apply scaling when game starts
 
 # Check if input is currently open (for movement blocking)
 func is_input_open() -> bool:
@@ -61,6 +71,13 @@ func _ready():
 	# Start with UI elements hidden
 	input_prompt.hide()
 	npc_text_container.hide()
+	
+	# Apply UI scaling based on settings
+	if apply_scale_on_ready:
+		if enable_auto_scaling:
+			_apply_dynamic_scaling()
+		else:
+			_apply_scale(manual_scale_override)
 
 func _input(event):
 	# Check if input field is open
@@ -300,7 +317,100 @@ func _on_hide_timer_timeout():
 	if not current_npc or not is_generating:
 		close_dialogue()
 
-# ============ Voice Input Handlers ============
+# ============================================
+# UI SCALING SYSTEM
+# ============================================
+
+func _apply_dynamic_scaling():
+	"""
+	Automatically scale UI based on screen resolution.
+	Base resolution: 1920x1080
+	Scales between 1.0x (HD) and 2.0x (4K+)
+	"""
+	var viewport_size = get_viewport().get_visible_rect().size
+	var base_width = 1920.0  # Reference resolution
+	var scale_factor = viewport_size.x / base_width
+	
+	# Clamp between 1.0 and 2.0 for reasonable sizes
+	scale_factor = clamp(scale_factor, 1.0, 2.0)
+	current_scale_factor = scale_factor
+	
+	print("[DialogueUI] Viewport size: ", viewport_size)
+	print("[DialogueUI] Scale factor: ", scale_factor)
+	
+	_apply_scale(scale_factor)
+
+func _apply_scale(scale_factor: float):
+	"""Apply a specific scale factor to all UI elements."""
+	# Scale font sizes
+	var scaled_font_size = int(base_font_size * scale_factor)
+	
+	# Apply scaled font size to labels
+	if npc_dialogue_label:
+		npc_dialogue_label.add_theme_font_size_override("font_size", scaled_font_size)
+	
+	if npc_name_label:
+		npc_name_label.add_theme_font_size_override("font_size", int(scaled_font_size * 0.85))  # Slightly smaller
+	
+	if input_field:
+		input_field.add_theme_font_size_override("font_size", scaled_font_size)
+	
+	# Scale minimum sizes
+	if npc_dialogue_label:
+		var base_min_size = Vector2(600, 80)
+		npc_dialogue_label.custom_minimum_size = base_min_size * scale_factor
+	
+	# Scale container margins
+	if npc_text_container:
+		var base_margin = 20.0
+		var scaled_margin = base_margin * scale_factor
+		npc_text_container.offset_left = scaled_margin
+		npc_text_container.offset_right = -scaled_margin
+		npc_text_container.offset_bottom = -scaled_margin
+		
+		var base_height = 120.0
+		var scaled_height = base_height * scale_factor
+		npc_text_container.offset_top = -scaled_height
+	
+	# Scale input prompt
+	if input_prompt:
+		var base_input_width = 250.0
+		var scaled_input_width = base_input_width * scale_factor
+		input_prompt.offset_left = -scaled_input_width
+		input_prompt.offset_right = scaled_input_width
+		
+		var base_input_height = 60.0
+		var scaled_input_height = base_input_height * scale_factor
+		input_prompt.offset_top = -scaled_input_height
+	
+	print("[DialogueUI] UI scaled: font_size=", scaled_font_size, "px, factor=", scale_factor)
+
+func set_manual_scale(scale: float):
+	"""
+	Manually set UI scale factor.
+	1.0 = default (18px), 1.5 = 50% larger (27px), 2.0 = double size (36px)
+	Call this from settings menu or console.
+	"""
+	scale = clamp(scale, 0.5, 3.0)
+	current_scale_factor = scale
+	enable_auto_scaling = false  # Disable auto-scaling when manual is used
+	
+	_apply_scale(scale)
+	print("[DialogueUI] Manual scale applied: ", scale)
+
+func reset_to_auto_scaling():
+	"""Re-enable automatic scaling based on screen resolution."""
+	enable_auto_scaling = true
+	_apply_dynamic_scaling()
+	print("[DialogueUI] Auto-scaling re-enabled")
+
+func get_current_scale() -> float:
+	"""Get the current scale factor being used."""
+	return current_scale_factor
+
+# ============================================
+# VOICE INPUT HANDLERS
+# ============================================
 
 func _start_voice_recording():
 	if is_generating or not current_npc:
