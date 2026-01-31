@@ -94,3 +94,9 @@ The eSpeak NG phoneme data included with the Kokoro model is used for
 text-to-phoneme conversion.
 
 ================================================================================
+
+This work is based on "Anime Character Base mesh" (https://sketchfab.com/3d-models/anime-character-base-mesh-1ab99094be564a86a0dd21e23cebc5de) by Marc Ed (https://sketchfab.com/marc.edouard.lepine17) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+
+"Anime Character Base mesh" (https://skfb.ly/ouSFV) by Marc Ed is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+
+================================================================================

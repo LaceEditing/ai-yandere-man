@@ -14,13 +14,15 @@ disable_receive_shadows = true
 script = ExtResource("1_lkv7d")
 
 [node name="Head" type="Node3D" parent="." unique_id=1798829846]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.839385, -1.5300136)
 
 [node name="Camera3D" type="Camera3D" parent="Head" unique_id=694857952]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2131141174]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 3, 0)
 shape = SubResource("CapsuleShape3D_he2x2")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=523749936]
+transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 3, 0)
 mesh = SubResource("CapsuleMesh_lkv7d")
 surface_material_override/0 = SubResource("StandardMaterial3D_ushfy")

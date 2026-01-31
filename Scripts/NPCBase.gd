@@ -96,8 +96,8 @@ enum VoicePreset {
 
 # References
 @onready var chat_node = $ChatNode
-@onready var vision_viewport: SubViewport = null
-@onready var npc_camera: Camera3D = null
+@onready var vision_viewport: SubViewport = $AnimeBoy/Camera3D/SubViewport
+@onready var npc_camera: Camera3D = $AnimeBoy/Camera3D
 
 # State
 var is_talking = false
@@ -426,7 +426,7 @@ func _setup_vision():
 	else:
 		vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
 	
-	npc_camera = get_node_or_null("CameraHead/Camera3D")
+	npc_camera = get_node_or_null("AnimeBoy/Camera3D")
 	
 	if npc_camera:
 		var viewport_camera = Camera3D.new()

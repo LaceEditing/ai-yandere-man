@@ -1,18 +1,12 @@
 [gd_scene format=3 uid="uid://5j3g3jx65e7m"]
 
 [ext_resource type="Script" uid="uid://dyuiw13kalc3f" path="res://Scripts/NPCBase.gd" id="1_rcxfb"]
+[ext_resource type="PackedScene" uid="uid://dqgy4erutei2j" path="res://Models/AnimeBaseMan/AnimeBoy.glb" id="2_6usod"]
 [ext_resource type="Script" uid="uid://b4wcslsfqeq3c" path="res://Scripts/Pipertts.gd" id="2_pbdkk"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rgmlm"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rcxfb"]
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_rcxfb"]
-
-[sub_resource type="BoxMesh" id="BoxMesh_rcxfb"]
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_pbdkk"]
-size = Vector3(1.2011719, 1.4467773, 1.2363892)
+radius = 0.50097656
+height = 3.8492668
 
 [node name="NPCBase" type="CharacterBody3D" unique_id=1257932761]
 script = ExtResource("1_rcxfb")
@@ -21,31 +15,19 @@ max_history_turns = 99
 enable_forgetting = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2039302470]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8287876, 0)
 shape = SubResource("CapsuleShape3D_rgmlm")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1325260183]
-material_override = SubResource("StandardMaterial3D_rcxfb")
-mesh = SubResource("CapsuleMesh_rcxfb")
+[node name="AnimeBoy" parent="." unique_id=1076075988 instance=ExtResource("2_6usod")]
+transform = Transform3D(-3, 0, -4.5298742e-07, 0, 3, 0, 4.5298742e-07, 0, -3, 0, -0.18846926, 0)
 
-[node name="Face" type="MeshInstance3D" parent="MeshInstance3D" unique_id=1293329331]
-transform = Transform3D(0.4236518, 0, 0, 0, 0.2772025, 0, 0, 0, 0.47029155, 0, 0.5891006, -0.34486794)
-mesh = SubResource("BoxMesh_rcxfb")
-
-[node name="ChatNode" type="NobodyWhoChat" parent="." unique_id=1361988431]
-
-[node name="Area3D" type="Area3D" parent="." unique_id=931120311]
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D" unique_id=1267750119]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.021484375, 0.22338867, -0.016021729)
-shape = SubResource("BoxShape3D_pbdkk")
-
-[node name="CameraHead" type="Node3D" parent="." unique_id=351386943]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49062467, -0.16605954)
-
-[node name="Camera3D" type="Camera3D" parent="CameraHead" unique_id=570635857]
+[node name="Camera3D" type="Camera3D" parent="AnimeBoy" unique_id=570635857]
+transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -5.418891e-09, 1.1582683, 0.06198489)
 fov = 85.0
 
-[node name="SubViewport" type="SubViewport" parent="CameraHead/Camera3D" unique_id=2086048846]
+[node name="SubViewport" type="SubViewport" parent="AnimeBoy/Camera3D" unique_id=2086048846]
+
+[node name="ChatNode" type="NobodyWhoChat" parent="." unique_id=1361988431]
 
 [node name="PiperTTS" type="Node" parent="." unique_id=727224127]
 script = ExtResource("2_pbdkk")

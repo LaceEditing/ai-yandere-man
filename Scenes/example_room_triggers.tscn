@@ -114,65 +114,6 @@ auto_exposure_min_sensitivity = 8.01
 
 [sub_resource type="Compositor" id="Compositor_l3p17"]
 
-[sub_resource type="Shader" id="Shader_kakeu"]
-code = "// NOTE: Shader automatically converted from Godot Engine 4.6.stable's StandardMaterial3D.
-
-shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
-
-uniform vec4 albedo : source_color;
-uniform sampler2D texture_albedo : source_color, filter_linear_mipmap, repeat_enable;
-uniform ivec2 albedo_texture_size;
-uniform float point_size : hint_range(0.1, 128.0, 0.1);
-
-uniform float roughness : hint_range(0.0, 1.0);
-uniform sampler2D texture_metallic : hint_default_white, filter_linear_mipmap, repeat_enable;
-uniform vec4 metallic_texture_channel;
-uniform sampler2D texture_roughness : hint_roughness_r, filter_linear_mipmap, repeat_enable;
-
-uniform float specular : hint_range(0.0, 1.0, 0.01);
-uniform float metallic : hint_range(0.0, 1.0, 0.01);
-
-uniform vec3 uv1_scale;
-uniform vec3 uv1_offset;
-uniform vec3 uv2_scale;
-uniform vec3 uv2_offset;
-
-void vertex() {
-	UV = UV * uv1_scale.xy + uv1_offset.xy;
-}
-
-void fragment() {
-	vec2 base_uv = UV;
-
-	vec4 albedo_tex = texture(texture_albedo, base_uv);
-	ALBEDO = albedo.rgb * albedo_tex.rgb;
-
-	float metallic_tex = dot(texture(texture_metallic, base_uv), metallic_texture_channel);
-	METALLIC = metallic_tex * metallic;
-	SPECULAR = specular;
-
-	vec4 roughness_texture_channel = vec4(1.0, 0.0, 0.0, 0.0);
-	float roughness_tex = dot(texture(texture_roughness, base_uv), roughness_texture_channel);
-	ROUGHNESS = roughness_tex * roughness;
-}
-"
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_f6wdd"]
-render_priority = 0
-shader = SubResource("Shader_kakeu")
-shader_parameter/albedo = Color(0.6500161, 0, 0, 1)
-shader_parameter/albedo_texture_size = Vector2i(0, 0)
-shader_parameter/point_size = 1.0
-shader_parameter/roughness = 1.0
-shader_parameter/metallic_texture_channel = Vector4(1, 0, 0, 0)
-shader_parameter/specular = 0.5
-shader_parameter/metallic = 0.0
-shader_parameter/uv1_scale = Vector3(1, 1, 1)
-shader_parameter/uv1_offset = Vector3(0, 0, 0)
-shader_parameter/uv2_scale = Vector3(1, 1, 1)
-shader_parameter/uv2_offset = Vector3(0, 0, 0)
-
 [node name="RoomTriggers" type="Node3D" unique_id=206421139]
 
 [node name="LivingRoom" type="Area3D" parent="." unique_id=2085866546]
@@ -275,31 +216,25 @@ font_size = 64
 outline_size = 8
 
 [node name="Character" parent="." unique_id=864869144 instance=ExtResource("2_m6lvx")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0897336, 1.0999999, 9.584789)
+transform = Transform3D(0.67, 0, 0, 0, 0.67, 0, 0, 0, 0.67, 0.092270374, 0.099999905, 13.705233)
 
 [node name="WorldEnvironment" parent="." unique_id=1160414132 instance=ExtResource("3_l3p17")]
 environment = SubResource("Environment_f8w8m")
 camera_attributes = SubResource("CameraAttributesPractical_qo5hu")
 compositor = SubResource("Compositor_l3p17")
 
-[node name="NPC_TestHoward" parent="." unique_id=1257932761 instance=ExtResource("4_kakeu")]
-transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.4982624, 1.0999994, -0.97276783)
-npc_name = "Test Howard"
+[node name="NPCBase_SpaghettiJim" parent="." unique_id=1002337649 instance=ExtResource("4_kakeu")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 2.3394296, 0.2007499, 0.7402782)
+npc_name = "Spaghetti Jim"
 npc_location = "Apartment"
-npc_personality = "Sneaky game developer who has a big heart and a bigger ego. Loves to tell lies, but loves to brag about developing games such as The Elder Scrolls V: Skyrim and Fallout 4 even more!"
-npc_background = "Legendary game developer for Testesda Game Studios, responsible for producing some of the most prolific RPG's ever made."
-npc_goals = "Making lots of money!"
-npc_knowledge = "Knows a lot about game development and RPG mechanics."
-npc_appearance = "A red capsule-shaped guy."
-player_appearance = "The player is a green humanoid figure."
-mood_decay_time = 300.0
-max_response_length = "3-5 sentences"
-max_history_turns = 50
+npc_personality = "A fancy and bubbly Italian chef."
+npc_background = "Famous Italian chef Spaghetti Jim, who ran multiple five star spaghetti joints before being caught up in a scandal about reusing spaghetti sauce."
+npc_goals = "Make lotsa pasta."
+npc_knowledge = "Knows lots about cooking."
+npc_appearance = "A tall man."
+player_appearance = "The player is a green humanoid figure, shaped like a capsule."
+mood_decay_time = 500.0
+max_response_length = "1-5 sentences"
+greeting = "Mama Mia!"
 enable_vision = true
-voice_preset = 9
-voice_volume_db = 6.0
-
-[node name="MeshInstance3D" parent="NPC_TestHoward" index="1" unique_id=1325260183]
-material_override = SubResource("ShaderMaterial_f6wdd")
-
-[editable path="NPC_TestHoward"]
+voice_preset = 5
