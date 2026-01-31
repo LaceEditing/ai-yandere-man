@@ -1,27 +1,51 @@
 extends CanvasLayer
 
+## Minimal Dialogue UI - AI2U Style
+## Text appears on screen as AI responds, player can move freely
+
 # UI References
-@onready var npc_name_label = $PanelContainer/MarginContainer/VBoxContainer/NPCNameLabel
-@onready var dialogue_text = $PanelContainer/MarginContainer/VBoxContainer/DialogueText
-@onready var player_input = $PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/PlayerInput
-@onready var send_button = $PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/SendButton
-@onready var mic_button = $PanelContainer/MarginContainer/VBoxContainer/HBoxContainer/MicButton
-@onready var close_button = $PanelContainer/MarginContainer/VBoxContainer/CloseButton
+@onready var npc_text_container = $NPCTextContainer
+@onready var npc_name_label = $NPCTextContainer/VBoxContainer/NPCNameLabel
+@onready var npc_dialogue_label = $NPCTextContainer/VBoxContainer/DialogueLabel
+
+@onready var input_prompt = $InputPrompt
+@onready var input_field = $InputPrompt/InputField
 
 # Current NPC we're talking to
 var current_npc: Node = null
 var is_generating: bool = false
-var conversation_history: String = ""
+
+# Typing effect
+var current_text: String = ""
+var display_text: String = ""
+var typing_speed: float = 0.02  # Seconds per character
+var typing_timer: float = 0.0
+var is_typing: bool = false
+
+# Auto-hide timer
+var auto_hide_delay: float = 3.0  # Seconds before text fades
+var hide_timer: Timer = null
 
 # Voice input
 var voice_recorder: VoiceRecorder = null
 var is_recording: bool = false
 var stt_provider = null
-var is_push_to_talk_active: bool = false
+
+# Check if input is currently open (for movement blocking)
+func is_input_open() -> bool:
+	return input_prompt.visible
+
+# Check if AI is busy generating or typing (prevent interruption)
+func is_busy() -> bool:
+	return is_generating or is_typing
+
+# Check if conversation is still active (includes waiting for auto-close)
+func has_active_conversation() -> bool:
+	return current_npc != null
 
 func _ready():
-	hide()
-	player_input.text_submitted.connect(_on_send_message)
+	# Don't hide the entire layer, just hide the UI elements
+	# hide()  ← This was hiding everything!
 	
 	# Setup voice recorder
 	voice_recorder = VoiceRecorder.new()
@@ -30,55 +54,76 @@ func _ready():
 	voice_recorder.recording_stopped.connect(_on_recording_stopped)
 	voice_recorder.recording_error.connect(_on_recording_error)
 	
-	# Setup mic button
-	if mic_button:
-		mic_button.pressed.connect(_on_mic_button_pressed)
-		_update_mic_button_state()
+	# Setup auto-hide timer
+	hide_timer = Timer.new()
+	hide_timer.one_shot = true
+	hide_timer.timeout.connect(_on_hide_timer_timeout)
+	add_child(hide_timer)
+	
+	# Start with UI elements hidden
+	input_prompt.hide()
+	npc_text_container.hide()
 
 func _input(event):
-	if not visible:
-		return
-	
-	# Close on ESC
-	if event.is_action_pressed("ui_cancel"):
-		close_dialogue()
-		get_viewport().set_input_as_handled()
-		return
-	
-	# Push-to-talk with V key (only when NOT focused on text input)
-	if event is InputEventKey and event.keycode == KEY_V:
-		if not player_input.has_focus():
-			if event.pressed and not event.echo and not is_recording:
-				player_input.text = ""
-				_start_voice_recording()
-				get_viewport().set_input_as_handled()
-			elif not event.pressed and is_recording:
-				_stop_voice_recording()
-				get_viewport().set_input_as_handled()
-	
-	# Send message with Enter (works even when not focused)
-	if event.is_action_pressed("SendMessage"):
-		if player_input.text.strip_edges().length() > 0 and not is_generating:
-			_send_text_message(player_input.text.strip_edges())
+	# Check if input field is open
+	if input_prompt.visible:
+		# Submit message with Enter (using SendMessage action)
+		if event.is_action_pressed("SendMessage"):
+			_submit_message()
 			get_viewport().set_input_as_handled()
-	
-	# Click anywhere to unfocus text input
-	if event is InputEventMouseButton and event.pressed:
-		if player_input.has_focus():
-			var mouse_pos = player_input.get_local_mouse_position()
-			var input_rect = Rect2(Vector2.ZERO, player_input.size)
-			if not input_rect.has_point(mouse_pos):
-				player_input.release_focus()
+			return
+		
+		# Cancel with ESC
+		if event.is_action_pressed("ui_cancel"):
+			_close_input()
+			get_viewport().set_input_as_handled()
+			return
+		
+		# Push-to-talk with V key
+		# ONLY handle if we're actually starting/stopping recording
+		# Otherwise let V type normally
+		if event.is_action_pressed("push_to_talk") and not is_recording:
+			# Only start recording if field is empty
+			if input_field.text.is_empty():
+				_start_voice_recording()
+				get_viewport().set_input_as_handled()  # Prevent "v" from being typed
+			# If field has text, don't handle - let "v" be typed normally
+		elif event.is_action_released("push_to_talk") and is_recording:
+			_stop_voice_recording()
+			get_viewport().set_input_as_handled()
+
+func _process(delta):
+	# Typing effect
+	if is_typing:
+		typing_timer += delta
+		
+		# Add characters based on typing speed
+		var chars_to_add = int(typing_timer / typing_speed)
+		if chars_to_add > 0:
+			typing_timer = 0.0
+			
+			var target_length = min(display_text.length() + chars_to_add, current_text.length())
+			display_text = current_text.substr(0, target_length)
+			npc_dialogue_label.text = display_text
+			
+			# Check if done typing
+			if display_text.length() >= current_text.length():
+				is_typing = false
+				_start_auto_hide_timer()
 
 func show_dialogue(npc: Node):
+	# Don't show new input if AI is still responding
+	if is_generating or is_typing:
+		print("DialogueUI: AI is busy, ignoring new dialogue request")
+		return
+	
 	if current_npc:
 		disconnect_npc_signals()
 	
 	current_npc = npc
 	npc_name_label.text = npc.npc_name
-	conversation_history = ""
-	dialogue_text.text = ""
 	
+	# Connect to NPC signals
 	npc.dialogue_updated.connect(_on_dialogue_updated)
 	npc.dialogue_finished.connect(_on_dialogue_finished)
 	
@@ -88,11 +133,36 @@ func show_dialogue(npc: Node):
 		stt_provider.transcription_received.connect(_on_transcription_received)
 		stt_provider.transcription_failed.connect(_on_transcription_failed)
 	
-	show()
-	player_input.editable = false  # Disable until first response
-	player_input.grab_focus()
-	_update_mic_button_state()
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	# Show input prompt
+	_show_input()
+
+func _show_input():
+	input_prompt.show()
+	input_field.text = ""
+	input_field.grab_focus()
+	
+	# Don't capture mouse - keep it captured for gameplay
+	# Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+func _close_input():
+	input_prompt.hide()
+	input_field.text = ""
+	
+	# Keep mouse captured for first-person movement
+	# Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+func _submit_message():
+	var message = input_field.text.strip_edges()
+	
+	if message.is_empty() or not current_npc or is_generating:
+		return
+	
+	# Send to NPC
+	is_generating = true
+	current_npc.talk_to_npc(message)
+	
+	# Close input and release player
+	_close_input()
 
 func close_dialogue():
 	if current_npc:
@@ -113,10 +183,13 @@ func close_dialogue():
 	if is_recording:
 		_stop_voice_recording()
 	
-	hide()
-	player_input.text = ""
-	conversation_history = ""
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	input_prompt.hide()
+	npc_text_container.hide()
+	is_generating = false
+	is_typing = false
+	
+	if hide_timer:
+		hide_timer.stop()
 
 func disconnect_npc_signals():
 	if current_npc:
@@ -125,52 +198,63 @@ func disconnect_npc_signals():
 		if current_npc.dialogue_finished.is_connected(_on_dialogue_finished):
 			current_npc.dialogue_finished.disconnect(_on_dialogue_finished)
 
-func _on_send_message(_message: String):
-	var message = player_input.text.strip_edges()
-	
-	if not message or not current_npc or is_generating:
+func _on_dialogue_updated(text: String):
+	# Don't show NPC text if input is open (player is typing)
+	if input_prompt.visible:
 		return
 	
-	_send_text_message(message)
-
-func _send_text_message(message: String):
-	# Add player message to history
-	conversation_history += "\n\n[You]: " + message
+	# Show NPC text container
+	if not npc_text_container.visible:
+		npc_text_container.show()
 	
-	# Clear input and update display
-	player_input.text = ""
-	dialogue_text.text = conversation_history + "\n\n[" + current_npc.npc_name + "]: "
+	# Update current text for typing effect
+	current_text = text
 	
-	# Disable input while generating
-	is_generating = true
-	player_input.editable = false
-	_update_mic_button_state()
-	
-	# Send to NPC
-	current_npc.talk_to_npc(message)
-
-func _on_dialogue_updated(text: String):
-	# Display the accumulated response
-	dialogue_text.text = conversation_history + "\n\n[" + current_npc.npc_name + "]: " + text
+	# If not already typing, start
+	if not is_typing:
+		display_text = ""
+		is_typing = true
+		typing_timer = 0.0
+		
+		# Stop auto-hide timer while typing
+		if hide_timer:
+			hide_timer.stop()
 
 func _on_dialogue_finished(text: String):
-	# Add complete response to history
-	conversation_history += "\n\n[" + current_npc.npc_name + "]: " + text
-	dialogue_text.text = conversation_history
+	# Don't show NPC response if input is open (suppress greeting)
+	if input_prompt.visible:
+		return
+	
+	# Final text update
+	current_text = text
+	
+	if not is_typing:
+		# Display immediately if not already typing
+		display_text = text
+		npc_dialogue_label.text = display_text
+		_start_auto_hide_timer()
+	# Otherwise typing effect will finish and trigger auto-hide
 	
 	# Re-enable input
 	is_generating = false
-	player_input.editable = true
-	player_input.grab_focus()
-	_update_mic_button_state()
+	
+	# Don't show input - conversation will end after auto-hide timer
+	# For next conversation, player presses Enter again
+
+func _start_auto_hide_timer():
+	# Don't start auto-hide if input is open (player is typing)
+	if input_prompt.visible:
+		return
+	
+	if hide_timer:
+		hide_timer.start(auto_hide_delay)
+
+func _on_hide_timer_timeout():
+	# After text fades, close the entire conversation
+	# Player returns to normal gameplay
+	close_dialogue()
 
 # ============ Voice Input Handlers ============
-
-func _on_mic_button_pressed():
-	if is_recording:
-		_stop_voice_recording()
-	else:
-		_start_voice_recording()
 
 func _start_voice_recording():
 	if is_generating or not current_npc:
@@ -178,7 +262,7 @@ func _start_voice_recording():
 	
 	# Check if voice input is configured
 	if not AIManager.is_voice_input_ready():
-		_show_voice_error("Voice input not configured. Please set up Parakeet API in settings.")
+		_show_error("Voice input not configured. Please set up Groq API in settings.")
 		return
 	
 	voice_recorder.start_recording()
@@ -188,17 +272,15 @@ func _stop_voice_recording():
 
 func _on_recording_started():
 	is_recording = true
-	_update_mic_button_state()
-	player_input.placeholder_text = "🎙️ Recording... (click mic to stop)"
+	input_field.placeholder_text = "🎙️ Recording... (release V to stop)"
 	print("Recording started")
 
 func _on_recording_stopped(audio_data: PackedByteArray):
 	is_recording = false
-	_update_mic_button_state()
-	player_input.placeholder_text = "Transcribing..."
+	input_field.placeholder_text = "Transcribing..."
 	print("Recording stopped, sending to STT API...")
 	
-	# Send to Parakeet API
+	# Send to STT API
 	if stt_provider:
 		stt_provider.transcribe_audio(audio_data)
 	else:
@@ -206,39 +288,24 @@ func _on_recording_stopped(audio_data: PackedByteArray):
 
 func _on_recording_error(error: String):
 	is_recording = false
-	_update_mic_button_state()
-	_show_voice_error(error)
+	input_field.placeholder_text = "Type your message..."
+	_show_error(error)
 
 func _on_transcription_received(text: String):
-	player_input.placeholder_text = "Type your reply..."
+	input_field.placeholder_text = "Type your message..."
 	print("Transcription received: ", text)
 	
-	# Put the transcribed text in the input box (don't auto-send)
+	# Put the transcribed text in the input box
 	if text.strip_edges().length() > 0:
-		player_input.text = text
-		player_input.grab_focus()  # Focus the input so user can edit if needed
+		input_field.text = text
+		input_field.grab_focus()
 	else:
-		_show_voice_error("No speech detected")
+		_show_error("No speech detected")
 
 func _on_transcription_failed(error: String):
-	player_input.placeholder_text = "Type your reply..."
-	_show_voice_error("Transcription failed: " + error)
+	input_field.placeholder_text = "Type your message..."
+	_show_error("Transcription failed: " + error)
 
-func _show_voice_error(message: String):
-	conversation_history += "\n\n[System]: " + message
-	dialogue_text.text = conversation_history
+func _show_error(message: String):
 	print("Voice error: ", message)
-
-func _update_mic_button_state():
-	if not mic_button:
-		return
-	
-	if is_recording:
-		mic_button.text = "Stop (V)"
-		mic_button.modulate = Color.RED
-	else:
-		mic_button.text = "Voice (V)"
-		mic_button.modulate = Color.WHITE
-	
-	# Disable mic during AI generation
-	mic_button.disabled = is_generating
+	# Could show error in UI if desired

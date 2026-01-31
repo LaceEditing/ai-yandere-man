@@ -10,6 +10,8 @@ extends CharacterBody3D
 @export_multiline var npc_background: String = "Former adventurer, now runs a general goods shop"
 @export_multiline var npc_goals: String = "Make money, retire comfortably"
 @export_multiline var npc_knowledge: String = "Knows about adventuring gear, local gossip"
+@export_multiline var npc_appearance: String = "A tall figure wearing a brown apron" ## What this NPC looks like (for self-awareness)
+@export_multiline var player_appearance: String = "The player is a green humanoid figure" ## What the player looks like (helps NPC recognize them)
 
 # Conversation settings
 @export_group("Dialogue Settings")
@@ -26,6 +28,12 @@ extends CharacterBody3D
 
 @export_range(10.0, 300.0, 5.0, "suffix:seconds") var forget_delay: float = 60.0 ## How long (in seconds) after dialogue closes before NPC forgets the conversation.
 
+# Vision settings
+@export_group("Vision Settings")
+@export var enable_vision: bool = false ## Enable NPC vision (requires vision-capable Groq model like Llama 4 Maverick/Scout)
+@export_range(0.0, 10.0, 0.1, "suffix:seconds") var vision_capture_interval: float = 2.0 ## How often to capture vision (0 = every message, higher = cached)
+@export_range(128, 1024, 64) var vision_resolution: int = 512 ## Resolution for vision capture (lower = faster, higher = more detail)
+
 # Text cleaning settings
 @export_group("Response Filtering")
 @export var remove_action_markers: bool = true ## Remove asterisks, parentheses, and brackets like *(smiles)* or (laughs) from responses.
@@ -38,6 +46,8 @@ extends CharacterBody3D
 
 # References
 @onready var chat_node = $ChatNode
+@onready var vision_viewport: SubViewport = null
+@onready var npc_camera: Camera3D = null
 
 # State
 var is_talking = false
@@ -50,10 +60,24 @@ var system_prompt: String = ""
 var groq_provider = null
 var using_groq: bool = false
 
+# Vision state
+var last_vision_capture_time: float = 0.0
+var cached_vision_base64: String = ""
+
+# Room/location state
+var current_room: String = "unknown"
+
 signal dialogue_updated(text: String)
 signal dialogue_finished(text: String)
 
 func _ready():
+	# Detect which room the NPC starts in
+	_detect_initial_room()
+	
+	# Setup vision if enabled
+	if enable_vision:
+		_setup_vision()
+	
 	# Build system prompt first (needed for both providers)
 	system_prompt = build_system_prompt()
 	
@@ -74,6 +98,96 @@ func _ready():
 	NPCManager.register_npc(self)
 	
 	print(npc_name, " is ready! Provider: ", AIManager.get_provider_name())
+	if enable_vision and vision_viewport:
+		print(npc_name, " vision enabled at ", vision_resolution, "x", vision_resolution)
+	if current_room != "unknown":
+		print(npc_name, " starting in room: ", current_room)
+
+func _detect_initial_room():
+	# Check which room area the NPC is currently inside
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsShapeQueryParameters3D.new()
+	
+	# Create a small sphere at NPC's position
+	var shape = SphereShape3D.new()
+	shape.radius = 0.1
+	query.shape = shape
+	query.transform = global_transform
+	query.collision_mask = 0  # We'll check manually
+	query.collide_with_areas = true
+	query.collide_with_bodies = false
+	
+	var results = space_state.intersect_shape(query, 10)
+	
+	# Look for Room areas
+	for result in results:
+		var area = result.collider
+		if area is Area3D and area.has_method("get_room_name"):
+			current_room = area.get_room_name()
+			RoomManager.set_npc_room(npc_name, current_room)
+			return
+	
+	# If no room found, try by checking parent nodes
+	var parent = get_parent()
+	while parent:
+		if parent is Area3D and parent.has_method("get_room_name"):
+			current_room = parent.get_room_name()
+			RoomManager.set_npc_room(npc_name, current_room)
+			return
+		parent = parent.get_parent()
+	
+	# No room detected
+	print(npc_name, " warning: Could not detect starting room")
+
+
+func _setup_vision():
+	# Find or create the vision viewport
+	vision_viewport = get_node_or_null("VisionViewport")
+	
+	if not vision_viewport:
+		# Create viewport programmatically if it doesn't exist
+		vision_viewport = SubViewport.new()
+		vision_viewport.name = "VisionViewport"
+		vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
+		vision_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		add_child(vision_viewport)
+	else:
+		# Update existing viewport size
+		vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
+	
+	# Find the NPC's camera
+	npc_camera = get_node_or_null("CameraHead/Camera3D")
+	
+	if npc_camera:
+		# Clone camera settings to viewport
+		var viewport_camera = Camera3D.new()
+		viewport_camera.fov = npc_camera.fov
+		viewport_camera.transform = npc_camera.transform
+		
+		# Optional: Set cull mask to hide NPC's own body (if it has visual layer set)
+		# viewport_camera.cull_mask = npc_camera.cull_mask
+		
+		vision_viewport.add_child(viewport_camera)
+		
+		# Make the viewport camera follow the NPC camera
+		npc_camera.tree_exited.connect(func(): 
+			if viewport_camera:
+				viewport_camera.queue_free()
+		)
+		
+		print(npc_name, " vision camera configured")
+		if player_appearance and "green" in player_appearance.to_lower():
+			print(npc_name, " knows player looks like: ", player_appearance)
+	else:
+		push_warning(npc_name, " vision enabled but no camera found at CameraHead/Camera3D")
+		enable_vision = false
+
+func _process(_delta):
+	# Update vision viewport camera to match NPC camera
+	if enable_vision and vision_viewport and npc_camera:
+		var viewport_camera = vision_viewport.get_child(0) as Camera3D
+		if viewport_camera:
+			viewport_camera.global_transform = npc_camera.global_transform
 
 func _setup_provider():
 	using_groq = AIManager.is_groq()
@@ -103,6 +217,9 @@ func _setup_local():
 		chat_node.start_worker()
 		
 		print(npc_name, " using local NobodyWho model")
+		
+		if enable_vision:
+			push_warning(npc_name, " vision is only supported with Groq provider")
 
 func _setup_groq():
 	# Setup for Groq API
@@ -111,6 +228,13 @@ func _setup_groq():
 	if groq_provider:
 		_connect_groq_signals()
 		print(npc_name, " using Groq API")
+		
+		if enable_vision:
+			# Check if current model supports vision
+			var current_model = AIManager.get_groq_model()
+			var vision_models = ["meta-llama/llama-4-maverick-17b-128e-instruct", "meta-llama/llama-4-scout-17b-16e-instruct"]
+			if current_model not in vision_models:
+				push_warning(npc_name, " vision enabled but current model (", current_model, ") may not support vision. Use Llama 4 Maverick or Scout.")
 	else:
 		push_error("Groq provider not available!")
 
@@ -158,17 +282,32 @@ func build_system_prompt() -> String:
 9. Express emotion through WORDS ONLY: Say "Hah!" or "Hmph" instead of (laughs) or (scoffs)
 10. If you want to convey an action, describe it in plain speech: "I'm shaking my head" NOT (shakes head)"""
 
+	if enable_vision:
+		prompt += """
+11. You are seeing through YOUR OWN EYES in a 3D game world
+12. This is your natural field of view - you're not being "shown" things, you're just looking around
+13. You can see the environment, objects, and the player character in front of you
+14. {player_appearance}
+15. React naturally to what you observe - if the player is right in front of you, you're talking face-to-face
+16. Mention what you see ONLY when it's relevant to the conversation or something notable happens
+17. Understand spatial context: things close to you are nearby, things far away are distant
+18. You're experiencing this world in real-time through your perspective
+19. You know which room you and the player are in - mention it naturally if relevant (e.g., "Why are you in the kitchen?")"""
+
 	if enable_memory:
 		prompt += """
-11. REMEMBER what has been said in this conversation
-12. Stay CONSISTENT with information you've already shared
-13. Reference past topics naturally when relevant
-14. Don't repeat yourself unless asked"""
+20. REMEMBER what has been said in this conversation
+21. Stay CONSISTENT with information you've already shared
+22. Reference past topics naturally when relevant
+23. Don't repeat yourself unless asked
+24. CRITICAL: Track who says what! If YOU said something, don't later attribute it to the player
+25. Example: If YOU said "I need coffee", don't later say "You wanted coffee" - that was YOUR statement"""
 
 	prompt += """
 
 # YOUR CHARACTER:
 Name: {name}
+Appearance: {npc_appearance}
 Personality: {personality}
 Background: {background}
 Goals: {goals}
@@ -177,6 +316,9 @@ Knowledge: {knowledge}
 # WORLD CONTEXT:
 {world_lore}
 Location: {location_lore}
+
+# SPATIAL CONTEXT:
+{spatial_context}
 
 # DIALOGUE STYLE EXAMPLES:
 GOOD: "Aye, got plenty of healing potions. 5 gold each."
@@ -195,6 +337,34 @@ GOOD: "Listen here - I'm telling you the truth."
 BAD: "(leans forward) Listen here..."
 """
 
+	if enable_vision:
+		prompt += """
+# VISION EXAMPLES:
+GOOD: You see the player walking toward you → "Hey, come over here."
+BAD: You see the player → "What's this green thing you're showing me?"
+
+GOOD: Player is standing in front of you → "What do you want?" or "Yes?" (natural conversation)
+BAD: Player is standing in front of you → "I see you've brought me a green capsule to look at"
+
+GOOD: Player moves behind you → "Hey! Get back where I can see you!"
+BAD: Player moves → "Thank you for showing me this movement"
+
+GOOD: You see a sword on the ground → "Someone left a weapon lying around..."
+BAD: You see a sword → "You're showing me a sword for some reason"
+
+GOOD: Player holds weapon in your face → "Whoa! Put that away!"
+BAD: Player holds weapon → "Interesting weapon you've brought to show me"
+
+# ROOM AWARENESS EXAMPLES:
+GOOD: Player in same room → Talk normally, no need to mention room unless relevant
+GOOD: Player in different room → "Why did you go to the kitchen?" or "I heard you in the bedroom..."
+GOOD: Player just moved → "What were you doing in there?" or "Looking for something in the kitchen?"
+BAD: Player in same room → "I see you're in the living room with me" (too obvious, don't state the obvious)
+BAD: Constantly mentioning rooms → "We're in living room. You're in living room too." (annoying)
+
+REMEMBER: You're seeing through your own eyes. The player is the person you're talking to. Don't act like things are being presented to you - you're just looking at your surroundings naturally.
+"""
+
 	if enable_memory:
 		prompt += """
 # MEMORY EXAMPLES:
@@ -203,6 +373,12 @@ BAD: Player asks "What's your name?" → You answer "Marcus" → Later you intro
 
 GOOD: You tell player "I used to adventure" → Player asks "What happened?" → You build on that story
 BAD: You tell player "I used to adventure" → Later you contradict yourself saying you never left town
+
+GOOD: YOU say "I need some coffee" → Later reference it as "I mentioned needing coffee" or "Like I said, I need coffee"
+BAD: YOU say "I need some coffee" → Later say "You wanted coffee" (that was YOUR statement, not the player's!)
+
+GOOD: PLAYER says "I'm looking for a key" → Later say "You mentioned looking for a key"
+BAD: PLAYER says "I'm looking for a key" → Later say "I was looking for a key" (that was the PLAYER, not you!)
 """
 
 	prompt += """
@@ -211,6 +387,11 @@ Remember:
 - NO actions in parentheses, brackets, or asterisks
 - Express everything through spoken words
 - Short, natural, in-character"""
+
+	if enable_vision:
+		prompt += """
+- React to what you see when appropriate
+- Don't narrate your vision constantly"""
 
 	if enable_memory:
 		prompt += """
@@ -230,9 +411,61 @@ You are {name} so speak as {name} normally would in the context of the conversat
 		"background": npc_background,
 		"goals": npc_goals,
 		"knowledge": npc_knowledge,
+		"npc_appearance": npc_appearance,
+		"player_appearance": player_appearance,
 		"world_lore": WorldLore.WORLD_LORE,
-		"location_lore": WorldLore.get_location_lore(npc_location)
+		"location_lore": WorldLore.get_location_lore(npc_location),
+		"spatial_context": _build_spatial_context()
 	})
+
+func _build_spatial_context() -> String:
+	var context = ""
+	
+	# Get NPC's current room
+	var npc_room = RoomManager.get_npc_room(npc_name)
+	if npc_room != "unknown":
+		context += "You are currently in: " + npc_room + "\n"
+	else:
+		context += "Your location is unknown.\n"
+	
+	# Get player's current room
+	var player_room = RoomManager.get_player_room()
+	
+	if player_room != "unknown":
+		if player_room == npc_room:
+			context += "The player is here with you in the same room.\n"
+		else:
+			context += "The player is currently in: " + player_room
+			
+			# Add distance/relationship context if possible
+			if npc_room != "unknown":
+				context += " (you are in: " + npc_room + ")\n"
+			else:
+				context += "\n"
+	else:
+		context += "The player's location is unknown.\n"
+	
+	# Check if player just changed rooms
+	if RoomManager.player_just_changed_rooms():
+		var prev_room = RoomManager.get_player_previous_room()
+		context += "The player just moved from " + prev_room + " to " + player_room + ".\n"
+	
+	# Add other NPCs in same room
+	if npc_room != "unknown":
+		var npcs_here = RoomManager.get_npcs_in_room(npc_room)
+		if npcs_here.size() > 1:  # More than just this NPC
+			var other_npcs = []
+			for other_npc in npcs_here:
+				if other_npc != npc_name:
+					other_npcs.append(other_npc)
+			
+			if other_npcs.size() > 0:
+				context += "Other characters nearby: " + ", ".join(other_npcs) + "\n"
+	
+	if context.is_empty():
+		context = "Location information not available.\n"
+	
+	return context
 
 func start_conversation():
 	is_talking = true
@@ -275,6 +508,8 @@ func talk_to_npc(message: String):
 		_send_to_local(message)
 
 func _send_to_local(message: String):
+	if enable_vision:
+		print(npc_name, " warning: Vision not supported with local provider")
 	chat_node.ask(message)
 
 func _send_to_groq(message: String):
@@ -282,16 +517,68 @@ func _send_to_groq(message: String):
 		dialogue_finished.emit("[Error: Groq provider not available]")
 		return
 	
-	# Set the system prompt
-	groq_provider.set_system_prompt(system_prompt)
+	# Rebuild system prompt with fresh spatial context (player may have moved!)
+	var fresh_system_prompt = build_system_prompt()
+	groq_provider.set_system_prompt(fresh_system_prompt)
 	
-	# Send with conversation history
+	# Check if we should capture vision
+	var vision_base64 = ""
+	if enable_vision and _should_capture_vision():
+		vision_base64 = await _capture_vision()
+	
+	# Send with conversation history and optional vision
 	var history_to_send = conversation_history.duplicate()
 	# Remove the last message since we're sending it separately
 	if history_to_send.size() > 0:
 		history_to_send.pop_back()
 	
-	groq_provider.ask(message, history_to_send)
+	groq_provider.ask(message, history_to_send, vision_base64)
+
+# ============ Vision Capture ============
+
+func _should_capture_vision() -> bool:
+	if not enable_vision or not vision_viewport:
+		return false
+	
+	# If interval is 0, always capture
+	if vision_capture_interval == 0.0:
+		return true
+	
+	# Check if enough time has passed
+	var current_time = Time.get_ticks_msec() / 1000.0
+	if current_time - last_vision_capture_time >= vision_capture_interval:
+		return true
+	
+	return false
+
+func _capture_vision() -> String:
+	if not vision_viewport:
+		return ""
+	
+	# Update capture time
+	last_vision_capture_time = Time.get_ticks_msec() / 1000.0
+	
+	# Wait for render to complete
+	await RenderingServer.frame_post_draw
+	
+	# Get the viewport texture
+	var viewport_texture = vision_viewport.get_texture()
+	var image = viewport_texture.get_image()
+	
+	if not image:
+		push_warning(npc_name, " failed to capture vision image")
+		return ""
+	
+	# Convert to PNG bytes
+	var png_bytes = image.save_png_to_buffer()
+	
+	# Encode to base64
+	var base64_string = Marshalls.raw_to_base64(png_bytes)
+	
+	cached_vision_base64 = base64_string
+	print(npc_name, " captured vision (", png_bytes.size(), " bytes, base64: ", base64_string.length(), " chars)")
+	
+	return base64_string
 
 # ============ Local Model Callbacks ============
 

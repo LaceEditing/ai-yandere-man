@@ -57,6 +57,7 @@ size = Vector3(13.02887, 0.3232422, 20)
 material = SubResource("StandardMaterial3D_bo1nx")
 
 [node name="Character" parent="." unique_id=864869144 instance=ExtResource("1_jjgbg")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.77554774, 0)
 walk_speed = null
 sprint_speed = null
 jump_velocity = null
@@ -74,6 +75,8 @@ npc_personality = "Grumpy old homeless man."
 npc_background = "Former gas station manager, got fired for stealing from the register. Now tries to make it big as an entrepreneur."
 npc_goals = "Make money, retire comfortably, scam people."
 npc_knowledge = "Knows about local gossip and current events."
+player_appearance = "The player is a green, capsule-shaped entity, but is human and this is not weird."
+enable_vision = true
 
 [node name="MeshInstance3D" parent="NPC_Carlito" index="1" unique_id=1325260183]
 material_override = SubResource("StandardMaterial3D_kry3j")

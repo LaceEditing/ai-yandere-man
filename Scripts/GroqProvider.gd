@@ -3,7 +3,7 @@ class_name GroqProvider
 
 ## Handles communication with Groq API for cloud-based LLM inference
 ## Only includes models that support function/tool calling
-## Updated: January 2025
+## Updated: January 2025 - Now with vision support
 
 signal response_updated(token: String)
 signal response_finished(full_response: String)
@@ -19,25 +19,29 @@ const PRODUCTION_MODELS: Dictionary = {
 		"name": "Llama 3.3 70B Versatile",
 		"description": "High quality, 131K context, tool use supported",
 		"speed": "280 t/s",
-		"category": "production"
+		"category": "production",
+		"vision": false
 	},
 	"llama-3.1-8b-instant": {
 		"name": "Llama 3.1 8B Instant", 
 		"description": "Very fast, 131K context, tool use supported",
 		"speed": "560 t/s",
-		"category": "production"
+		"category": "production",
+		"vision": false
 	},
 	"openai/gpt-oss-120b": {
 		"name": "GPT-OSS 120B",
 		"description": "OpenAI flagship, parallel tool use, reasoning",
 		"speed": "500 t/s",
-		"category": "production"
+		"category": "production",
+		"vision": false
 	},
 	"openai/gpt-oss-20b": {
 		"name": "GPT-OSS 20B",
 		"description": "Fast OpenAI model, tool use supported",
 		"speed": "1000 t/s",
-		"category": "production"
+		"category": "production",
+		"vision": false
 	},
 }
 
@@ -47,25 +51,29 @@ const PREVIEW_MODELS: Dictionary = {
 		"name": "Llama 4 Maverick 17B",
 		"description": "Llama 4, vision + tool use, 131K context",
 		"speed": "600 t/s",
-		"category": "preview"
+		"category": "preview",
+		"vision": true
 	},
 	"meta-llama/llama-4-scout-17b-16e-instruct": {
 		"name": "Llama 4 Scout 17B",
 		"description": "Fast Llama 4, vision + tool use",
 		"speed": "750 t/s",
-		"category": "preview"
+		"category": "preview",
+		"vision": true
 	},
 	"qwen/qwen3-32b": {
 		"name": "Qwen3 32B",
 		"description": "Alibaba Qwen3, tool use, 131K context",
 		"speed": "400 t/s",
-		"category": "preview"
+		"category": "preview",
+		"vision": false
 	},
 	"moonshotai/kimi-k2-instruct-0905": {
 		"name": "Kimi K2",
 		"description": "Moonshot AI, tool use, 262K context (largest!)",
 		"speed": "200 t/s",
-		"category": "preview"
+		"category": "preview",
+		"vision": false
 	},
 }
 
@@ -107,7 +115,7 @@ func set_system_prompt(prompt: String):
 func clear_history():
 	conversation_history.clear()
 
-func ask(message: String, history: Array = []):
+func ask(message: String, history: Array = [], vision_base64: String = ""):
 	if api_key.is_empty():
 		request_failed.emit("Groq API key not set. Please configure in settings.")
 		return
@@ -133,11 +141,37 @@ func ask(message: String, history: Array = []):
 	for entry in history:
 		messages.append(entry)
 	
-	# Add current message
-	messages.append({
+	# Add current message with optional vision
+	var user_message: Dictionary = {
 		"role": "user",
-		"content": message
-	})
+		"content": null  # Will be set below
+	}
+	
+	if vision_base64.is_empty():
+		# Text only
+		user_message.content = message
+	else:
+		# Multimodal (text + image)
+		user_message.content = [
+			{
+				"type": "image_url",
+				"image_url": {
+					"url": "data:image/png;base64," + vision_base64
+				}
+			},
+			{
+				"type": "text",
+				"text": message
+			}
+		]
+		
+		# Check if current model supports vision
+		if current_model in AVAILABLE_MODELS:
+			var model_info = AVAILABLE_MODELS[current_model]
+			if not model_info.get("vision", false):
+				push_warning("Current model ", current_model, " may not support vision. Consider using Llama 4 Maverick or Scout.")
+	
+	messages.append(user_message)
 	
 	# Build request body
 	var body: Dictionary = {
@@ -155,14 +189,18 @@ func ask(message: String, history: Array = []):
 		"Authorization: Bearer " + api_key
 	]
 	
-	print("Sending request to Groq API with model: ", current_model)
+	if vision_base64.is_empty():
+		print("Sending request to Groq API with model: ", current_model)
+	else:
+		print("Sending request to Groq API with model: ", current_model, " (with vision)")
+	
 	var error: int = http_request.request(api_endpoint, headers, HTTPClient.METHOD_POST, json_body)
 	
 	if error != OK:
 		is_requesting = false
 		request_failed.emit("Failed to send HTTP request: " + str(error))
 
-func _on_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	is_requesting = false
 	
 	if result != HTTPRequest.RESULT_SUCCESS:
@@ -228,5 +266,15 @@ static func get_model_display_name(model_id: String) -> String:
 		var category_prefix: String = ""
 		if info.category == "preview":
 			category_prefix = "[Preview] "
-		return category_prefix + info.name + " - " + info.speed
+		var vision_suffix: String = ""
+		if info.get("vision", false):
+			vision_suffix = " 👁️"
+		return category_prefix + info.name + " - " + info.speed + vision_suffix
 	return model_id
+
+# Check if a model supports vision
+static func model_supports_vision(model_id: String) -> bool:
+	var all_models = get_all_models()
+	if model_id in all_models:
+		return all_models[model_id].get("vision", false)
+	return false

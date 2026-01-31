@@ -1,59 +1,59 @@
-[gd_scene format=3 uid="uid://b4xhh0srl2yh7"]
+[gd_scene load_steps=3 format=3 uid="uid://b4xhh0srl2yh7"]
 
-[ext_resource type="Script" uid="uid://bwbxkic00xvcf" path="res://Scripts/DialogueUI.gd" id="1_q8n66"]
+[ext_resource type="Script" path="res://Scripts/DialogueUI.gd" id="1_dialogue"]
 
-[sub_resource type="Theme" id="Theme_mrc6h"]
-default_font_size = 20
+[sub_resource type="Theme" id="Theme_dialogue"]
+default_font_size = 18
 
-[node name="DialogueUI" type="CanvasLayer" unique_id=1741724806]
+[node name="DialogueUI" type="CanvasLayer"]
 layer = 10
-script = ExtResource("1_q8n66")
+script = ExtResource("1_dialogue")
 
-[node name="PanelContainer" type="PanelContainer" parent="." unique_id=2123408381]
+[node name="NPCTextContainer" type="PanelContainer" parent="."]
+modulate = Color(1, 1, 1, 0.9)
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -74.0
+offset_left = 20.0
+offset_top = -120.0
+offset_right = -20.0
+offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 0
 
-[node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=1920703857]
+[node name="VBoxContainer" type="VBoxContainer" parent="NPCTextContainer"]
 layout_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer" unique_id=2070821817]
+[node name="NPCNameLabel" type="Label" parent="NPCTextContainer/VBoxContainer"]
 layout_mode = 2
-
-[node name="NPCNameLabel" type="Label" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=201182804]
-layout_mode = 2
-theme = SubResource("Theme_mrc6h")
+theme = SubResource("Theme_dialogue")
+theme_override_colors/font_color = Color(1, 0.8, 0.4, 1)
+theme_override_font_sizes/font_size = 16
 text = "NPC Name"
 
-[node name="DialogueText" type="RichTextLabel" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=618751742]
-custom_minimum_size = Vector2(0, 200)
+[node name="DialogueLabel" type="Label" parent="NPCTextContainer/VBoxContainer"]
+custom_minimum_size = Vector2(600, 80)
 layout_mode = 2
-bbcode_enabled = true
-fit_content = true
-scroll_following = true
+theme = SubResource("Theme_dialogue")
+text = "NPC dialogue appears here as they speak..."
+autowrap_mode = 3
 
-[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1335465486]
-layout_mode = 2
-theme_override_constants/separation = 8
+[node name="InputPrompt" type="PanelContainer" parent="."]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -250.0
+offset_top = -60.0
+offset_right = 250.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
 
-[node name="PlayerInput" type="LineEdit" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=75552508]
+[node name="InputField" type="LineEdit" parent="InputPrompt"]
 layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "Type your reply..."
-
-[node name="SendButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=280379662]
-layout_mode = 2
-text = "Send"
-
-[node name="MicButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/HBoxContainer" unique_id=50812787]
-custom_minimum_size = Vector2(100, 0)
-layout_mode = 2
-text = "Voice (V)"
-
-[node name="CloseButton" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=463083863]
-layout_mode = 2
-text = "Close (ESC)"
+theme = SubResource("Theme_dialogue")
+placeholder_text = "Type or hold V for voice..."
+clear_button_enabled = true
