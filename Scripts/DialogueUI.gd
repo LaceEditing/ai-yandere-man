@@ -1,7 +1,7 @@
 extends CanvasLayer
 
-## Minimal Dialogue UI - AI2U Style
-## Text appears on screen as AI responds, player can move freely
+## Enhanced Dialogue UI - AI2U Style with Voice Sync
+## Fixes: Voice cutoff, typewriter sync with audio
 
 # UI References
 @onready var npc_text_container = $NPCTextContainer
@@ -15,12 +15,13 @@ extends CanvasLayer
 var current_npc: Node = null
 var is_generating: bool = false
 
-# Typing effect
+# Typing effect with voice sync
 var current_text: String = ""
 var display_text: String = ""
 var typing_speed: float = 0.02  # Seconds per character
 var typing_timer: float = 0.0
 var is_typing: bool = false
+var waiting_for_voice: bool = false  # Wait for TTS to start
 
 # Auto-hide timer
 var auto_hide_delay: float = 3.0  # Seconds before text fades
@@ -37,16 +38,13 @@ func is_input_open() -> bool:
 
 # Check if AI is busy generating or typing (prevent interruption)
 func is_busy() -> bool:
-	return is_generating or is_typing
+	return is_generating or is_typing or waiting_for_voice
 
 # Check if conversation is still active (includes waiting for auto-close)
 func has_active_conversation() -> bool:
 	return current_npc != null
 
 func _ready():
-	# Don't hide the entire layer, just hide the UI elements
-	# hide()  ← This was hiding everything!
-	
 	# Setup voice recorder
 	voice_recorder = VoiceRecorder.new()
 	add_child(voice_recorder)
@@ -80,20 +78,17 @@ func _input(event):
 			return
 		
 		# Push-to-talk with V key
-		# ONLY handle if we're actually starting/stopping recording
-		# Otherwise let V type normally
 		if event.is_action_pressed("push_to_talk") and not is_recording:
 			# Only start recording if field is empty
 			if input_field.text.is_empty():
 				_start_voice_recording()
-				get_viewport().set_input_as_handled()  # Prevent "v" from being typed
-			# If field has text, don't handle - let "v" be typed normally
+				get_viewport().set_input_as_handled()
 		elif event.is_action_released("push_to_talk") and is_recording:
 			_stop_voice_recording()
 			get_viewport().set_input_as_handled()
 
 func _process(delta):
-	# Typing effect
+	# Typing effect (starts when voice starts, or immediately if no voice)
 	if is_typing:
 		typing_timer += delta
 		
@@ -109,11 +104,13 @@ func _process(delta):
 			# Check if done typing
 			if display_text.length() >= current_text.length():
 				is_typing = false
+				# NEW: Start timer immediately when typing finishes
+				# Voice can keep playing in background
 				_start_auto_hide_timer()
 
 func show_dialogue(npc: Node):
 	# Don't show new input if AI is still responding
-	if is_generating or is_typing:
+	if is_generating or is_typing or waiting_for_voice:
 		print("DialogueUI: AI is busy, ignoring new dialogue request")
 		return
 	
@@ -126,6 +123,12 @@ func show_dialogue(npc: Node):
 	# Connect to NPC signals
 	npc.dialogue_updated.connect(_on_dialogue_updated)
 	npc.dialogue_finished.connect(_on_dialogue_finished)
+	
+	# NEW: Connect to voice signals for proper synchronization
+	if npc.has_signal("voice_started"):
+		npc.voice_started.connect(_on_npc_voice_started)
+	if npc.has_signal("voice_finished"):
+		npc.voice_finished.connect(_on_npc_voice_finished)
 	
 	# Get STT provider from AIManager
 	stt_provider = AIManager.get_stt_provider()
@@ -140,16 +143,10 @@ func _show_input():
 	input_prompt.show()
 	input_field.text = ""
 	input_field.grab_focus()
-	
-	# Don't capture mouse - keep it captured for gameplay
-	# Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 func _close_input():
 	input_prompt.hide()
 	input_field.text = ""
-	
-	# Keep mouse captured for first-person movement
-	# Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 func _submit_message():
 	var message = input_field.text.strip_edges()
@@ -183,10 +180,14 @@ func close_dialogue():
 	if is_recording:
 		_stop_voice_recording()
 	
+	# NEW: Don't stop voice - let it finish naturally in background
+	# Voice will only be interrupted when new voice starts
+	
 	input_prompt.hide()
 	npc_text_container.hide()
 	is_generating = false
 	is_typing = false
+	waiting_for_voice = false
 	
 	if hide_timer:
 		hide_timer.stop()
@@ -197,6 +198,11 @@ func disconnect_npc_signals():
 			current_npc.dialogue_updated.disconnect(_on_dialogue_updated)
 		if current_npc.dialogue_finished.is_connected(_on_dialogue_finished):
 			current_npc.dialogue_finished.disconnect(_on_dialogue_finished)
+		# NEW: Disconnect voice signals
+		if current_npc.has_signal("voice_started") and current_npc.voice_started.is_connected(_on_npc_voice_started):
+			current_npc.voice_started.disconnect(_on_npc_voice_started)
+		if current_npc.has_signal("voice_finished") and current_npc.voice_finished.is_connected(_on_npc_voice_finished):
+			current_npc.voice_finished.disconnect(_on_npc_voice_finished)
 
 func _on_dialogue_updated(text: String):
 	# Don't show NPC text if input is open (player is typing)
@@ -210,15 +216,23 @@ func _on_dialogue_updated(text: String):
 	# Update current text for typing effect
 	current_text = text
 	
-	# If not already typing, start
-	if not is_typing:
-		display_text = ""
-		is_typing = true
-		typing_timer = 0.0
-		
-		# Stop auto-hide timer while typing
-		if hide_timer:
-			hide_timer.stop()
+	# Don't start typing yet - wait for voice to start (if voice is enabled)
+	if not is_typing and not waiting_for_voice:
+		if current_npc and current_npc.has_method("is_currently_speaking"):
+			# Check if NPC will speak this
+			if current_npc.enable_voice and not current_text.begins_with("[Error"):
+				# Wait for voice to start
+				waiting_for_voice = true
+				display_text = ""
+				npc_dialogue_label.text = "..."  # Show waiting indicator
+				if hide_timer:
+					hide_timer.stop()
+			else:
+				# No voice, start typing immediately
+				_start_typewriter()
+		else:
+			# No voice capability, start typing immediately
+			_start_typewriter()
 
 func _on_dialogue_finished(text: String):
 	# Don't show NPC response if input is open (suppress greeting)
@@ -227,32 +241,64 @@ func _on_dialogue_finished(text: String):
 	
 	# Final text update
 	current_text = text
-	
-	if not is_typing:
-		# Display immediately if not already typing
-		display_text = text
-		npc_dialogue_label.text = display_text
-		_start_auto_hide_timer()
-	# Otherwise typing effect will finish and trigger auto-hide
-	
-	# Re-enable input
 	is_generating = false
 	
-	# Don't show input - conversation will end after auto-hide timer
-	# For next conversation, player presses Enter again
+	# If already typing or waiting for voice, let those systems handle completion
+	if is_typing or waiting_for_voice:
+		return
+	
+	# Not typing and not waiting - display immediately and start timer
+	display_text = text
+	npc_dialogue_label.text = display_text
+	_start_auto_hide_timer()
+
+# NEW: Voice synchronization handlers
+func _on_npc_voice_started():
+	"""Called when NPC starts speaking - begin typewriter effect."""
+	if waiting_for_voice:
+		waiting_for_voice = false
+		_start_typewriter()
+
+func _on_npc_voice_finished():
+	"""Called when NPC finishes speaking - voice complete (timer already running)."""
+	# Voice finished, but we don't need to do anything
+	# Timer already started when typewriter finished
+	# Player might already be typing their next message
+	pass
+
+func _start_typewriter():
+	"""Start the typewriter effect."""
+	display_text = ""
+	is_typing = true
+	typing_timer = 0.0
+	npc_dialogue_label.text = ""
+	
+	if hide_timer:
+		hide_timer.stop()
 
 func _start_auto_hide_timer():
-	# Don't start auto-hide if input is open (player is typing)
+	"""Start the countdown to hide the dialogue (only when safe)."""
+	# Don't start if input is open
 	if input_prompt.visible:
 		return
 	
+	# Don't start if still waiting for voice to start
+	if waiting_for_voice:
+		return
+	
+	# NEW: Start timer even if voice is still playing
+	# Voice will continue in background
 	if hide_timer:
 		hide_timer.start(auto_hide_delay)
 
 func _on_hide_timer_timeout():
-	# After text fades, close the entire conversation
-	# Player returns to normal gameplay
-	close_dialogue()
+	"""After text fades, close the entire conversation."""
+	# Hide UI but DON'T stop voice - let it finish naturally
+	npc_text_container.hide()
+	
+	# If no conversation is active anymore, fully close
+	if not current_npc or not is_generating:
+		close_dialogue()
 
 # ============ Voice Input Handlers ============
 

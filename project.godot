@@ -27,6 +27,8 @@ WorldLore="*uid://bhj62o43kkqu6"
 NPCManager="*uid://cj671t57k4khc"
 AISettingsMenu="*uid://xipqddr74ji1"
 RoomManager="*uid://cga5g022wv7tn"
+Overlay_Debug="*uid://bhjoc708ay4he"
+Prosody="*uid://cvcpbyg2hrtek"
 
 [display]
 

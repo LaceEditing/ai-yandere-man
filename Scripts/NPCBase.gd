@@ -208,9 +208,25 @@ func _ready():
 		mood_decay_timer.timeout.connect(_on_mood_decay)
 		add_child(mood_decay_timer)
 	
+	# Continuous vision capture timer
+	if enable_vision and vision_capture_interval > 0:
+		var vision_timer = Timer.new()
+		vision_timer.name = "VisionTimer"
+		vision_timer.wait_time = vision_capture_interval
+		vision_timer.timeout.connect(_on_vision_timer_timeout)
+		add_child(vision_timer)
+		vision_timer.start()
+		print("[", npc_name, "] Continuous vision capture enabled (every %.1fs)" % vision_capture_interval)
+	
 	NPCManager.register_npc(self)
 	
 	print(npc_name, " ready! Mood: ", Mood.keys()[current_mood], ", Voice: ", VoicePreset.keys()[voice_preset])
+
+func _on_vision_timer_timeout():
+	"""Continuously capture vision even when not in conversation."""
+	if enable_vision and vision_viewport:
+		# Capture and cache vision
+		await _capture_vision()
 
 
 func _exit_tree():
@@ -360,54 +376,19 @@ func _get_mood_adjusted_speed() -> float:
 			return voice_speed
 
 
-## Add Kokoro-compatible markers based on mood
+## Add Kokoro-compatible markers based on mood (ENHANCED with ProsodyAnalyzer)
 func _add_mood_markers(text: String) -> String:
 	if not mood_affects_voice:
 		return text
 	
-	var result = text
+	# Use ProsodyAnalyzer for intelligent enhancement
+	var enhanced = ProsodyAnalyzer.enhance_text(
+		text,
+		current_mood,
+		{"personality": npc_personality}  # Optional personality traits
+	)
 	
-	# Kokoro responds well to punctuation and certain patterns
-	match current_mood:
-		Mood.HAPPY:
-			# Add slight emphasis, ensure exclamations
-			if not result.ends_with("!") and not result.ends_with("?"):
-				if randf() > 0.5:
-					result = result.trim_suffix(".") + "!"
-		
-		Mood.ANGRY:
-			# Make sentences more punchy
-			result = result.replace(", ", "! ")
-			if not result.ends_with("!"):
-				result = result.trim_suffix(".") + "!"
-		
-		Mood.SAD:
-			# Add pauses (ellipses work well)
-			result = result.replace(". ", "... ")
-			if result.ends_with("."):
-				result = result.trim_suffix(".") + "..."
-		
-		Mood.FEARFUL:
-			# Quick stuttery feel - add some hesitation
-			result = result.replace(", ", "... ")
-		
-		Mood.SURPRISED:
-			# Emphasis on first word, exclamations
-			if not result.begins_with("What") and not result.begins_with("How"):
-				result = result[0].to_upper() + result.substr(1)
-			if not result.ends_with("!") and not result.ends_with("?"):
-				result = result.trim_suffix(".") + "!"
-		
-		Mood.SARCASTIC:
-			# Drawn out, maybe add "oh" or emphasis
-			pass  # Sarcasm is hard to convey in TTS, rely on speed
-		
-		Mood.TIRED:
-			# Lots of pauses
-			result = result.replace(", ", "... ")
-			result = result.replace(". ", "... ")
-	
-	return result
+	return enhanced
 
 # ============ VISION SETUP ============
 
@@ -644,11 +625,6 @@ func start_conversation():
 
 func end_conversation():
 	is_talking = false
-	
-	if voice_player and voice_player.playing:
-		voice_player.stop()
-		is_speaking = false
-	
 	if enable_forgetting and forget_timer:
 		forget_timer.start(forget_delay)
 
@@ -787,6 +763,12 @@ func _speak(text: String):
 	
 	if not kokoro_tts.is_available():
 		return
+	
+	# Stop previous voice if still playing (only interrupt for new speech)
+	if voice_player and voice_player.playing:
+		voice_player.stop()
+		is_speaking = false
+		print("[", npc_name, "] Interrupted previous speech for new response")
 	
 	if kokoro_tts.is_busy():
 		return
