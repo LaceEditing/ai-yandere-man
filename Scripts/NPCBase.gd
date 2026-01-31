@@ -34,6 +34,14 @@ extends CharacterBody3D
 @export_range(0.0, 10.0, 0.1, "suffix:seconds") var vision_capture_interval: float = 2.0 ## How often to capture vision (0 = every message, higher = cached)
 @export_range(128, 1024, 64) var vision_resolution: int = 512 ## Resolution for vision capture (lower = faster, higher = more detail)
 
+# Voice settings
+@export_group("Voice Settings")
+@export var enable_voice: bool = true ## Enable voice synthesis using Piper TTS
+@export var speak_greeting: bool = false ## Speak the greeting when conversation starts (can cause delays)
+@export_global_file("*.exe") var piper_executable: String = "" ## Path to piper.exe
+@export_global_file("*.onnx") var voice_model_file: String = "" ## Path to voice .onnx file
+@export_range(-20.0, 6.0, 0.5, "suffix:dB") var voice_volume_db: float = 0.0 ## Volume adjustment for voice playback
+
 # Text cleaning settings
 @export_group("Response Filtering")
 @export var remove_action_markers: bool = true ## Remove asterisks, parentheses, and brackets like *(smiles)* or (laughs) from responses.
@@ -67,8 +75,15 @@ var cached_vision_base64: String = ""
 # Room/location state
 var current_room: String = "unknown"
 
+# Voice state
+var piper_tts: PiperTTS = null
+var voice_player: AudioStreamPlayer3D = null
+var is_speaking: bool = false
+
 signal dialogue_updated(text: String)
 signal dialogue_finished(text: String)
+signal voice_started()
+signal voice_finished()
 
 func _ready():
 	# Detect which room the NPC starts in
@@ -77,6 +92,10 @@ func _ready():
 	# Setup vision if enabled
 	if enable_vision:
 		_setup_vision()
+	
+	# Setup voice if enabled
+	if enable_voice:
+		_setup_voice()
 	
 	# Build system prompt first (needed for both providers)
 	system_prompt = build_system_prompt()
@@ -100,8 +119,35 @@ func _ready():
 	print(npc_name, " is ready! Provider: ", AIManager.get_provider_name())
 	if enable_vision and vision_viewport:
 		print(npc_name, " vision enabled at ", vision_resolution, "x", vision_resolution)
+	if enable_voice and piper_tts and piper_tts.is_available():
+		print(npc_name, " voice enabled: ", voice_model_file.get_file())
 	if current_room != "unknown":
 		print(npc_name, " starting in room: ", current_room)
+
+
+func _setup_voice():
+	# Create PiperTTS
+	piper_tts = PiperTTS.new()
+	piper_tts.piper_executable = piper_executable
+	piper_tts.voice_model_path = voice_model_file
+	add_child(piper_tts)
+	
+	# Connect signals
+	piper_tts.synthesis_completed.connect(_on_voice_ready)
+	piper_tts.synthesis_failed.connect(_on_voice_failed)
+	
+	# Create 3D audio player (voice comes from NPC's position in space)
+	voice_player = AudioStreamPlayer3D.new()
+	voice_player.name = "VoicePlayer"
+	voice_player.volume_db = voice_volume_db
+	voice_player.max_distance = 15.0
+	voice_player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
+	voice_player.finished.connect(_on_voice_done)
+	add_child(voice_player)
+	
+	if not piper_tts.is_available():
+		print(npc_name, " voice warning: ", piper_tts.get_status())
+
 
 func _detect_initial_room():
 	# Check which room area the NPC is currently inside
@@ -484,9 +530,18 @@ func start_conversation():
 			conversation_history.append({"role": "assistant", "content": greeting})
 		current_response = greeting
 		dialogue_finished.emit(greeting)
+		
+		# Optionally speak the greeting
+		if speak_greeting:
+			_speak(greeting)
 
 func end_conversation():
 	is_talking = false
+	
+	# Stop any playing voice
+	if voice_player and voice_player.playing:
+		voice_player.stop()
+		is_speaking = false
 	
 	# Start forget timer when dialogue closes
 	if enable_forgetting and forget_timer:
@@ -601,6 +656,9 @@ func _on_response_complete(full_response: String):
 	print(npc_name, ": ", cleaned)
 	current_response = cleaned
 	dialogue_finished.emit(cleaned)
+	
+	# Speak the response
+	_speak(cleaned)
 
 # ============ Groq API Callbacks ============
 
@@ -623,10 +681,72 @@ func _on_groq_response_finished(full_response: String):
 	print(npc_name, " (Groq): ", cleaned)
 	current_response = cleaned
 	dialogue_finished.emit(cleaned)
+	
+	# Speak the response
+	_speak(cleaned)
 
 func _on_groq_request_failed(error: String):
 	print("Groq request failed: ", error)
 	dialogue_finished.emit("[Error: " + error + "]")
+
+# ============ Voice Synthesis ============
+
+func _speak(text: String):
+	"""Send text to Piper TTS for synthesis."""
+	if not enable_voice or not piper_tts:
+		return
+	
+	# Don't speak error messages
+	if text.begins_with("[Error"):
+		return
+	
+	# Skip empty text
+	if text.strip_edges().is_empty():
+		return
+	
+	# Check if Piper is available
+	if not piper_tts.is_available():
+		print(npc_name, " voice unavailable: ", piper_tts.get_status())
+		return
+	
+	# Skip if already synthesizing (don't queue, just skip)
+	if piper_tts.is_busy():
+		print(npc_name, " voice busy, skipping: '", text.substr(0, 20), "...'")
+		return
+	
+	piper_tts.synthesize(text)
+
+func _on_voice_ready(audio: AudioStreamWAV):
+	"""Called when Piper finishes synthesizing."""
+	if not voice_player or not audio:
+		return
+	
+	print(npc_name, " speaking (", audio.get_length(), " seconds)")
+	
+	voice_player.stream = audio
+	voice_player.play()
+	is_speaking = true
+	voice_started.emit()
+
+func _on_voice_failed(error: String):
+	"""Called when voice synthesis fails."""
+	print(npc_name, " voice error: ", error)
+	is_speaking = false
+
+func _on_voice_done():
+	"""Called when voice playback finishes."""
+	is_speaking = false
+	voice_finished.emit()
+
+## Check if NPC is currently speaking
+func is_currently_speaking() -> bool:
+	return is_speaking
+
+## Stop voice playback immediately
+func stop_speaking():
+	if voice_player and voice_player.playing:
+		voice_player.stop()
+		is_speaking = false
 
 # ============ Memory Management ============
 

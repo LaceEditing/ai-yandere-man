@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://5j3g3jx65e7m"]
 
 [ext_resource type="Script" uid="uid://dyuiw13kalc3f" path="res://Scripts/NPCBase.gd" id="1_rcxfb"]
+[ext_resource type="Script" uid="uid://b4wcslsfqeq3c" path="res://Scripts/Pipertts.gd" id="2_pbdkk"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rgmlm"]
 
@@ -45,3 +46,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.49062467, -0.16605954)
 fov = 85.0
 
 [node name="SubViewport" type="SubViewport" parent="CameraHead/Camera3D" unique_id=2086048846]
+
+[node name="PiperTTS" type="Node" parent="." unique_id=727224127]
+script = ExtResource("2_pbdkk")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=113857208]

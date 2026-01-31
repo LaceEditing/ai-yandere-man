@@ -274,6 +274,8 @@ npc_appearance = "A red capsule-shaped guy"
 max_response_length = "1-3 sentences"
 max_history_turns = 50
 enable_vision = true
+piper_executable = "E:/GameDev/GodotProjects/male-yander-ai/addons/piper/piper.exe"
+voice_model_file = "E:/GameDev/GodotProjects/male-yander-ai/addons/piper/voices/en_GB-alan-medium.onnx"
 
 [node name="MeshInstance3D" parent="NPC_TestHoward" index="1" unique_id=1325260183]
 material_override = SubResource("ShaderMaterial_f6wdd")
