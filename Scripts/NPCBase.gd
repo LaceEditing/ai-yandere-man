@@ -1,7 +1,7 @@
 extends CharacterBody3D
 
 ## Enhanced NPC with mood system and expressive TTS
-## Moods affect AI responses AND voice tone via Kokoro markers
+## FIXED: Audio only stops when NEW audio is ready, not during generation
 
 # ============ ENUMS ============
 
@@ -606,6 +606,8 @@ func start_conversation():
 	is_talking = true
 	current_response = ""
 	
+	# ✅ DON'T STOP AUDIO - Let previous conversation finish
+	
 	if enable_forgetting and forget_timer:
 		forget_timer.stop()
 	
@@ -625,6 +627,10 @@ func start_conversation():
 
 func end_conversation():
 	is_talking = false
+	
+	# ✅ DON'T STOP AUDIO - Let it finish naturally in background
+	# Audio will only stop when new audio starts (in _speak)
+	
 	if enable_forgetting and forget_timer:
 		forget_timer.start(forget_delay)
 
@@ -635,6 +641,9 @@ func talk_to_npc(message: String):
 		trim_conversation_history()
 	
 	current_response = ""
+	
+	# ✅ DON'T STOP AUDIO - Let previous response play while AI thinks!
+	# Audio will only stop when new audio starts in _speak()
 	
 	# Rebuild system prompt with current mood
 	system_prompt = build_system_prompt()
@@ -764,11 +773,13 @@ func _speak(text: String):
 	if not kokoro_tts.is_available():
 		return
 	
-	# Stop previous voice if still playing (only interrupt for new speech)
+	# ✅ THIS IS THE ONLY PLACE AUDIO STOPS!
+	# Stop previous voice only when NEW audio is ready to play
+	# This ensures previous audio plays until replacement is ready
 	if voice_player and voice_player.playing:
 		voice_player.stop()
 		is_speaking = false
-		print("[", npc_name, "] Interrupted previous speech for new response")
+		print("[", npc_name, "] Interrupted previous speech - new audio ready")
 	
 	if kokoro_tts.is_busy():
 		return
@@ -808,6 +819,7 @@ func is_currently_speaking() -> bool:
 
 
 func stop_speaking():
+	"""Manual stop - only use if absolutely necessary"""
 	if voice_player and voice_player.playing:
 		voice_player.stop()
 		is_speaking = false
