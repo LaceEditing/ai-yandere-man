@@ -2,9 +2,11 @@
 
 [ext_resource type="Script" uid="uid://d1chj566hlcd" path="res://Scripts/Room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://bumo05wek6sx3" path="res://Scenes/character.tscn" id="2_m6lvx"]
+[ext_resource type="Material" uid="uid://ddwbnov6murb2" path="res://Materials/ShaderMats/OutlineShader.tres" id="3_ax78n"]
 [ext_resource type="PackedScene" uid="uid://bs2jm62cmkbrk" path="res://addons/instant-realistic-light/light_scene.tscn" id="3_l3p17"]
 [ext_resource type="Texture2D" uid="uid://dhgi5i3owk7ld" path="res://Textures/HDRIs/kloofendal_48d_partly_cloudy_puresky_4k.exr" id="4_f6wdd"]
 [ext_resource type="PackedScene" uid="uid://5j3g3jx65e7m" path="res://Scenes/npc_base.tscn" id="4_kakeu"]
+[ext_resource type="Shader" uid="uid://c3x7twt1tsa5d" path="res://Shaders/cel/cel-shader-base.gdshader" id="4_v6w0w"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_living_trigger"]
 size = Vector3(8, 4, 10)
@@ -15,6 +17,16 @@ albedo_color = Color(0.4, 0.3, 0.3, 1)
 [sub_resource type="BoxMesh" id="BoxMesh_living_floor"]
 material = SubResource("Material_living")
 size = Vector3(8, 0.2, 10)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ax78n"]
+render_priority = 0
+next_pass = ExtResource("3_ax78n")
+shader = ExtResource("4_v6w0w")
+shader_parameter/color = Color(0.41996887, 0.32635537, 0, 1)
+shader_parameter/specular = Color(0.012617188, 0.012617188, 0.012617188, 0)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_living_floor"]
 size = Vector3(8, 0.2, 10)
@@ -29,6 +41,16 @@ albedo_color = Color(0.5, 0.5, 0.4, 1)
 material = SubResource("Material_kitchen")
 size = Vector3(6, 0.2, 8)
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_j7ulc"]
+render_priority = 0
+next_pass = ExtResource("3_ax78n")
+shader = ExtResource("4_v6w0w")
+shader_parameter/color = Color(0.19139826, 0.39865893, 0, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_kitchen_floor"]
 size = Vector3(6, 0.2, 8)
 
@@ -42,6 +64,16 @@ albedo_color = Color(0.4, 0.35, 0.45, 1)
 material = SubResource("Material_bedroom")
 size = Vector3(7, 0.2, 9)
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_v6w0w"]
+render_priority = 0
+next_pass = ExtResource("3_ax78n")
+shader = ExtResource("4_v6w0w")
+shader_parameter/color = Color(0.5702878, 0.19233957, 0.14391711, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_bedroom_floor"]
 size = Vector3(7, 0.2, 9)
 
@@ -54,6 +86,16 @@ albedo_color = Color(0.35, 0.35, 0.35, 1)
 [sub_resource type="BoxMesh" id="BoxMesh_hallway_floor"]
 material = SubResource("Material_hallway")
 size = Vector3(12, 0.2, 3)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5pcn1"]
+render_priority = 0
+next_pass = ExtResource("3_ax78n")
+shader = ExtResource("4_v6w0w")
+shader_parameter/color = Color(0.4302716, 0.2626345, 0.46383417, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_hallway_floor"]
 size = Vector3(12, 0.2, 3)
@@ -79,7 +121,7 @@ void sky() {
 shader = SubResource("Shader_7fwq4")
 shader_parameter/source_panorama = ExtResource("4_f6wdd")
 shader_parameter/exposure = 1.0
-shader_parameter/speed = 0.002
+shader_parameter/speed = 0.001
 
 [sub_resource type="Sky" id="Sky_tyhie"]
 sky_material = SubResource("ShaderMaterial_f36oo")
@@ -114,7 +156,20 @@ auto_exposure_min_sensitivity = 8.01
 
 [sub_resource type="Compositor" id="Compositor_l3p17"]
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_d5bq8"]
+render_priority = 0
+next_pass = ExtResource("3_ax78n")
+shader = ExtResource("4_v6w0w")
+shader_parameter/color = Color(0.99999994, 0.70344526, 0.34826308, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
 [node name="RoomTriggers" type="Node3D" unique_id=206421139]
+
+[node name="Character" parent="." unique_id=864869144 instance=ExtResource("2_m6lvx")]
+transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0.55779934, 0.099999905, 12.640925)
 
 [node name="LivingRoom" type="Area3D" parent="." unique_id=2085866546]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
@@ -129,6 +184,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="LivingRoom/Floor" unique_id=1607656355]
 mesh = SubResource("BoxMesh_living_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_ax78n")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="LivingRoom/Floor" unique_id=768733528]
 shape = SubResource("BoxShape3D_living_floor")
@@ -154,6 +210,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Kitchen/Floor" unique_id=11090530]
 mesh = SubResource("BoxMesh_kitchen_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_j7ulc")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Kitchen/Floor" unique_id=2050931109]
 shape = SubResource("BoxShape3D_kitchen_floor")
@@ -179,6 +236,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Bedroom/Floor" unique_id=2131593432]
 mesh = SubResource("BoxMesh_bedroom_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_v6w0w")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Bedroom/Floor" unique_id=320659949]
 shape = SubResource("BoxShape3D_bedroom_floor")
@@ -204,6 +262,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Hallway/Floor" unique_id=482812104]
 mesh = SubResource("BoxMesh_hallway_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_5pcn1")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Hallway/Floor" unique_id=546097477]
 shape = SubResource("BoxShape3D_hallway_floor")
@@ -215,16 +274,13 @@ text = "HALLWAY"
 font_size = 64
 outline_size = 8
 
-[node name="Character" parent="." unique_id=864869144 instance=ExtResource("2_m6lvx")]
-transform = Transform3D(0.67, 0, 0, 0, 0.67, 0, 0, 0, 0.67, 0.092270374, 0.099999905, 13.705233)
-
 [node name="WorldEnvironment" parent="." unique_id=1160414132 instance=ExtResource("3_l3p17")]
 environment = SubResource("Environment_f8w8m")
 camera_attributes = SubResource("CameraAttributesPractical_qo5hu")
 compositor = SubResource("Compositor_l3p17")
 
 [node name="NPCBase_SpaghettiJim" parent="." unique_id=1002337649 instance=ExtResource("4_kakeu")]
-transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 2.3394296, 0.2007499, 0.7402782)
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0.98902416, 0.15969509, 0.7402782)
 npc_name = "Spaghetti Jim"
 npc_location = "Apartment"
 npc_personality = "A fancy and bubbly Italian chef."
@@ -238,3 +294,128 @@ max_response_length = "1-5 sentences"
 greeting = "Mama Mia!"
 enable_vision = true
 voice_preset = 5
+
+[node name="Skeleton3D" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature" parent_id_path=PackedInt32Array(1002337649, 1273267177, 856446177) index="0" unique_id=938120867]
+bones/0/position = Vector3(16.343008, -12.39035, -7457.597)
+bones/0/rotation = Quaternion(-0.72777504, -0.054197423, 0.011620761, 0.68357235)
+bones/1/position = Vector3(4.005432e-05, 521.97864, -69.38031)
+bones/1/rotation = Quaternion(-0.036943663, 0.011213152, 0.023852937, 0.9989697)
+bones/2/position = Vector3(-1.9073486e-06, 614.3333, 6.1511855e-05)
+bones/2/rotation = Quaternion(0.010090905, 0.001011852, 0.013833265, 0.9998529)
+bones/3/position = Vector3(-1.9073486e-06, 702.0894, -8.106683e-06)
+bones/3/rotation = Quaternion(0.00986816, 0.0012019542, 0.0138869705, 0.99985415)
+bones/4/position = Vector3(-2.4795532e-05, 789.85724, 0.00027794807)
+bones/4/rotation = Quaternion(0.11491223, -0.0011404743, 0.0038623682, 0.99336755)
+bones/5/position = Vector3(4.529953e-05, 560.40784, 134.1277)
+bones/5/rotation = Quaternion(-0.06595837, 0.011932641, -0.0014932703, 0.9977499)
+bones/6/position = Vector3(4.9114227e-05, 1429.6897, 342.18146)
+bones/7/position = Vector3(347.00204, 647.06256, -17.292389)
+bones/7/rotation = Quaternion(-0.65457064, -0.3490764, 0.49894375, -0.44803807)
+bones/8/position = Vector3(-0.00017263864, 754.4005, -0.00090624904)
+bones/8/rotation = Quaternion(0.48976487, 0.18951027, 0.08821071, 0.84642494)
+bones/9/position = Vector3(5.348411e-06, 1460.2665, -0.00019307714)
+bones/9/rotation = Quaternion(-0.00010925438, -5.155409e-05, 0.012671022, 0.9999197)
+bones/10/position = Vector3(3.137278e-05, 1908.9749, -0.00020461241)
+bones/10/rotation = Quaternion(0.08436749, -0.2805571, -0.035681378, 0.9554563)
+bones/11/position = Vector3(-164.11946, 293.6981, 71.445175)
+bones/11/rotation = Quaternion(0.164131, 0.051400132, 0.22462462, 0.9591469)
+bones/12/position = Vector3(-29.448334, 273.57556, 0.0001242077)
+bones/12/rotation = Quaternion(-0.09501263, 0.09298637, -0.20503497, 0.96968395)
+bones/13/position = Vector3(1.2139969, 213.38303, -0.00013637825)
+bones/13/rotation = Quaternion(-0.12951179, -0.06690979, 0.07400126, 0.9865463)
+bones/14/position = Vector3(28.23436, 171.14786, 0.00018119813)
+bones/15/position = Vector3(-208.68286, 780.56274, 11.935537)
+bones/15/rotation = Quaternion(0.0414789, 0.0017375806, 0.054644443, 0.99764246)
+bones/16/position = Vector3(-1.0654297, 157.28662, -4.913751e-05)
+bones/16/rotation = Quaternion(0.15120417, 0.00036054515, -0.01046081, 0.9884472)
+bones/17/position = Vector3(-0.14535522, 144.70534, 0.00016652865)
+bones/17/rotation = Quaternion(0.07017676, -0.00016719317, -0.00032636803, 0.9975346)
+bones/18/position = Vector3(1.2104797, 112.742256, -0.00020980863)
+bones/19/position = Vector3(-77.86378, 794.3082, -39.22938)
+bones/19/rotation = Quaternion(0.11249516, 0.00026720623, 0.02318876, 0.9933817)
+bones/20/position = Vector3(-1.3015289, 174.82185, 0.00035321023)
+bones/20/rotation = Quaternion(0.15140072, 1.14249415e-05, -0.00686404, 0.9884487)
+bones/21/position = Vector3(1.1679611, 166.92513, -0.00014857692)
+bones/21/rotation = Quaternion(0.16008313, -0.0007930642, -0.017799696, 0.9869427)
+bones/22/position = Vector3(0.1335411, 136.03389, -6.1035127e-05)
+bones/23/position = Vector3(64.753456, 742.1913, -8.648394)
+bones/23/rotation = Quaternion(0.15950176, -0.00031953023, 0.01667977, 0.9870567)
+bones/24/position = Vector3(-0.6181792, 194.60258, -0.00026957746)
+bones/24/rotation = Quaternion(0.18148957, 0.00069806696, -0.018136457, 0.98322546)
+bones/25/position = Vector3(-0.71318, 163.1683, 0.0004896744)
+bones/25/rotation = Quaternion(0.15530403, -0.00017839333, -0.008650831, 0.98782885)
+bones/26/position = Vector3(1.3315095, 157.13316, -0.00025177002)
+bones/27/position = Vector3(221.79353, 710.9494, 6.679432)
+bones/27/rotation = Quaternion(0.21041419, 0.0049240096, 0.0008695001, 0.97759956)
+bones/28/position = Vector3(-0.060325623, 162.0882, -4.268848e-06)
+bones/28/rotation = Quaternion(0.1513729, 7.215256e-05, -0.01448879, 0.9883706)
+bones/29/position = Vector3(-0.096954346, 141.51878, -0.0005260614)
+bones/29/rotation = Quaternion(0.14360659, -4.209997e-05, -0.012627395, 0.98955435)
+bones/30/position = Vector3(0.1573391, 122.91195, 0.00026631358)
+bones/31/position = Vector3(-347.00116, 647.5027, -20.608332)
+bones/31/rotation = Quaternion(0.6502028, -0.35331896, 0.5204635, 0.4260515)
+bones/32/position = Vector3(8.8245826e-05, 754.4008, 1.8087565e-05)
+bones/32/rotation = Quaternion(0.420162, -0.272706, -0.120637335, 0.85705423)
+bones/33/position = Vector3(0.0001764715, 1460.281, -3.003783e-05)
+bones/33/rotation = Quaternion(0.00053567736, 0.004841464, -0.058089506, 0.9982995)
+bones/34/position = Vector3(-7.11183e-05, 1909.0602, 8.7922934e-05)
+bones/34/rotation = Quaternion(0.08526704, 0.17148353, 0.053676065, 0.98002136)
+bones/35/position = Vector3(167.14192, 294.876, 65.934044)
+bones/35/rotation = Quaternion(0.1764023, -0.05148354, -0.23687749, 0.95400244)
+bones/36/position = Vector3(31.901733, 274.39517, 0.0001235623)
+bones/36/rotation = Quaternion(-0.09236761, -0.08223151, 0.2361406, 0.9638173)
+bones/37/position = Vector3(-1.5856476, 214.83788, 0.00031099137)
+bones/37/rotation = Quaternion(-0.1670242, 0.073252805, -0.079898775, 0.9799761)
+bones/38/position = Vector3(-30.316399, 164.612, 0.0003032684)
+bones/39/position = Vector3(218.98164, 777.6561, 13.311168)
+bones/39/rotation = Quaternion(0.041194204, 0.00014259374, -0.05634763, 0.997561)
+bones/40/position = Vector3(1.2562561, 161.05046, -0.0004069357)
+bones/40/rotation = Quaternion(0.1511193, -0.00018451133, 0.00917382, 0.98847306)
+bones/41/position = Vector3(-0.3471985, 142.06718, 7.186471e-05)
+bones/41/rotation = Quaternion(0.070136964, 0.00029599277, 0.0040038056, 0.9975293)
+bones/42/position = Vector3(-0.9091644, 118.27027, 0.0002937317)
+bones/43/position = Vector3(76.956825, 766.44446, -28.47172)
+bones/43/rotation = Quaternion(0.112031974, -0.0003967839, -0.0241041, 0.9934122)
+bones/44/position = Vector3(1.8515015, 187.86604, 1.4755904e-05)
+bones/44/rotation = Quaternion(0.15136033, -1.0861782e-05, 0.006066681, 0.98846006)
+bones/45/position = Vector3(-1.2361832, 175.07593, 0.00022982714)
+bones/45/rotation = Quaternion(0.16003692, 0.0010584763, 0.016742764, 0.9869685)
+bones/46/position = Vector3(-0.6153183, 147.92122, 7.629353e-05)
+bones/47/position = Vector3(-89.95451, 826.21014, -17.59826)
+bones/47/rotation = Quaternion(0.15903717, 0.0008378145, -0.018671174, 0.9870957)
+bones/48/position = Vector3(0.46020603, 155.12389, 0.00018128539)
+bones/48/rotation = Quaternion(0.18142447, 0.00031898275, 0.012590435, 0.9833243)
+bones/49/position = Vector3(-1.2509565, 147.45601, 0.00019632073)
+bones/49/rotation = Quaternion(0.15524668, 0.00022279262, 0.0231001, 0.9876057)
+bones/50/position = Vector3(0.7909012, 116.99739, -0.00025177008)
+bones/51/position = Vector3(-205.98415, 696.1913, 6.5171957)
+bones/51/rotation = Quaternion(0.20989789, 0.0025192196, -0.0033763943, 0.9777143)
+bones/52/position = Vector3(-0.73012924, 176.41797, 6.6039385e-05)
+bones/52/rotation = Quaternion(0.15110451, -0.00095378654, 0.024963003, 0.98820215)
+bones/53/position = Vector3(1.7639627, 144.9755, 0.00046952098)
+bones/53/rotation = Quaternion(0.14335707, -8.766842e-05, 0.006198313, 0.9896516)
+bones/54/position = Vector3(-1.0338707, 134.587, 0.00022697449)
+bones/55/position = Vector3(678.96405, -289.595, 14.372566)
+bones/55/rotation = Quaternion(0.13391978, 0.084008895, 0.9847912, -0.07207164)
+bones/56/position = Vector3(0.00011944328, 3233.6545, -3.8008555e-05)
+bones/56/rotation = Quaternion(-0.13986175, -0.0161381, 0.04544226, 0.98899615)
+bones/57/position = Vector3(-4.2986794e-06, 3392.3909, -2.2695287e-05)
+bones/57/rotation = Quaternion(0.48929703, -0.012216782, -0.02531587, 0.8716641)
+bones/58/position = Vector3(-9.6529446e-05, 1093.9205, -9.156932e-05)
+bones/58/rotation = Quaternion(0.31521976, -0.036870316, 0.011923373, 0.94822735)
+bones/59/position = Vector3(-0.0004055202, 435.8855, 5.435948e-05)
+bones/60/position = Vector3(-678.964, -289.59622, 14.231849)
+bones/60/rotation = Quaternion(-0.089367285, -0.0058007045, 0.9954598, -0.032244917)
+bones/61/position = Vector3(5.3842086e-07, 3233.811, 4.7596517e-05)
+bones/61/rotation = Quaternion(-0.09042768, 0.08478563, -0.03708671, 0.9915941)
+bones/62/position = Vector3(3.287327e-05, 3392.1685, -0.00021392501)
+bones/62/rotation = Quaternion(0.526021, 0.0059625795, -0.010550714, 0.8503852)
+bones/63/position = Vector3(-5.0567258e-05, 1104.7289, 3.505469e-06)
+bones/63/rotation = Quaternion(0.33164665, 0.037413426, -0.01262282, 0.942577)
+bones/64/position = Vector3(5.4061413e-05, 438.50302, 0.00010490417)
+
+[node name="Body_PolySphere1_default_0" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature/Skeleton3D" index="0" unique_id=570337719]
+surface_material_override/0 = SubResource("ShaderMaterial_d5bq8")
+
+[editable path="NPCBase_SpaghettiJim"]
+[editable path="NPCBase_SpaghettiJim/AnimeBoy"]

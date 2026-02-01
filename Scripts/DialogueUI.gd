@@ -2,6 +2,7 @@ extends CanvasLayer
 
 ## Enhanced Dialogue UI - AI2U Style with Voice Sync + Auto Scaling
 ## Fixes: Voice cutoff, typewriter sync with audio, auto-scales to screen resolution
+## NOW: Supports auto-greetings without opening input field
 
 # UI References
 @onready var npc_text_container = $NPCTextContainer
@@ -125,7 +126,7 @@ func _process(delta):
 				# Voice can keep playing in background
 				_start_auto_hide_timer()
 
-func show_dialogue(npc: Node):
+func show_dialogue(npc: Node, show_input: bool = true):
 	# Don't show new input if AI is still responding
 	if is_generating or is_typing or waiting_for_voice:
 		print("DialogueUI: AI is busy, ignoring new dialogue request")
@@ -153,8 +154,9 @@ func show_dialogue(npc: Node):
 		stt_provider.transcription_received.connect(_on_transcription_received)
 		stt_provider.transcription_failed.connect(_on_transcription_failed)
 	
-	# Show input prompt
-	_show_input()
+	# Show input prompt only if requested (for player-initiated conversations)
+	if show_input:
+		_show_input()
 
 func _show_input():
 	input_prompt.show()
@@ -255,6 +257,10 @@ func _on_dialogue_finished(text: String):
 	# Don't show NPC response if input is open (suppress greeting)
 	if input_prompt.visible:
 		return
+	
+	# Show NPC text container if not visible
+	if not npc_text_container.visible:
+		npc_text_container.show()
 	
 	# Final text update
 	current_text = text

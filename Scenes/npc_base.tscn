@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://5j3g3jx65e7m"]
 
 [ext_resource type="Script" uid="uid://dyuiw13kalc3f" path="res://Scripts/NPCBase.gd" id="1_rcxfb"]
-[ext_resource type="PackedScene" uid="uid://dqgy4erutei2j" path="res://Models/AnimeBaseMan/AnimeBoy.glb" id="2_6usod"]
+[ext_resource type="PackedScene" uid="uid://c780k7nv17rcd" path="res://Models/AnimeBaseMan/BoyMixamo.glb" id="2_6usod"]
 [ext_resource type="Script" uid="uid://b4wcslsfqeq3c" path="res://Scripts/Pipertts.gd" id="2_pbdkk"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_rgmlm"]
@@ -14,18 +14,18 @@ greeting = "Hello there."
 max_history_turns = 99
 enable_forgetting = false
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2039302470]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8287876, 0)
-shape = SubResource("CapsuleShape3D_rgmlm")
-
-[node name="AnimeBoy" parent="." unique_id=1076075988 instance=ExtResource("2_6usod")]
-transform = Transform3D(-3, 0, -4.5298742e-07, 0, 3, 0, 4.5298742e-07, 0, -3, 0, -0.18846926, 0)
+[node name="AnimeBoy" parent="." unique_id=1273267177 instance=ExtResource("2_6usod")]
+transform = Transform3D(-0.03, 0, -2.6226832e-09, 0, 0.03, 0, 2.6226832e-09, 0, -0.03, 0, -0.06573573, 0)
 
 [node name="Camera3D" type="Camera3D" parent="AnimeBoy" unique_id=570635857]
-transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -5.418891e-09, 1.1582683, 0.06198489)
+transform = Transform3D(-33.333336, 0, 7.9499114e-07, 0, 33.333336, 0, -7.9499114e-07, 0, -33.333336, -1.4783231e-07, 109.54453, 6.198489)
 fov = 85.0
 
 [node name="SubViewport" type="SubViewport" parent="AnimeBoy/Camera3D" unique_id=2086048846]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2039302470]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8287876, 0)
+shape = SubResource("CapsuleShape3D_rgmlm")
 
 [node name="ChatNode" type="NobodyWhoChat" parent="." unique_id=1361988431]
 

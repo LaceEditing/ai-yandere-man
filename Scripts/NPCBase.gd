@@ -1,7 +1,7 @@
 extends CharacterBody3D
 
-## Enhanced NPC with mood system and expressive TTS
-## FIXED: Audio only stops when NEW audio is ready, not during generation
+## Enhanced NPC with mood system, expressive TTS, and AUTO-GENERATED GREETINGS
+## Generates unique greeting on spawn using AI based on character context
 
 # ============ ENUMS ============
 
@@ -61,7 +61,8 @@ enum VoicePreset {
 # Conversation settings
 @export_group("Dialogue Settings")
 @export var max_response_length: String = "1-2 sentences"
-@export var greeting: String = "Aye, what can I do for ye?"
+@export var greeting: String = "Aye, what can I do for ye?" ## Fallback greeting (used if generation fails)
+@export var generate_greeting_on_start: bool = true ## Generate unique greeting using AI
 
 # Memory settings
 @export_group("Memory Settings")
@@ -79,7 +80,7 @@ enum VoicePreset {
 # Voice settings
 @export_group("Voice Settings")
 @export var enable_voice: bool = true
-@export var speak_greeting: bool = false
+@export var speak_greeting: bool = true ## Auto-speak the generated greeting (requires enable_voice)
 @export var voice_preset: VoicePreset = VoicePreset.AM_ADAM
 @export_range(0.5, 1.5, 0.05) var voice_speed: float = 1.0 ## Base speed (lower = faster)
 @export_range(-20.0, 6.0, 0.5, "suffix:dB") var voice_volume_db: float = 0.0
@@ -107,6 +108,11 @@ var forget_timer: Timer
 var mood_decay_timer: Timer
 var system_prompt: String = ""
 
+# Greeting generation state
+var generated_greeting: String = ""
+var greeting_generated: bool = false
+var is_generating_greeting: bool = false
+
 # Current mood
 var current_mood: Mood = Mood.NEUTRAL
 
@@ -133,6 +139,7 @@ signal dialogue_finished(text: String)
 signal voice_started()
 signal voice_finished()
 signal mood_changed(old_mood: Mood, new_mood: Mood)
+signal greeting_generation_complete(greeting_text: String)
 
 # ============ MOOD DESCRIPTIONS ============
 
@@ -221,17 +228,151 @@ func _ready():
 	NPCManager.register_npc(self)
 	
 	print(npc_name, " ready! Mood: ", Mood.keys()[current_mood], ", Voice: ", VoicePreset.keys()[voice_preset])
+	
+	# Generate greeting AFTER everything is set up
+	if generate_greeting_on_start:
+		_generate_initial_greeting()
+
 
 func _on_vision_timer_timeout():
 	"""Continuously capture vision even when not in conversation."""
 	if enable_vision and vision_viewport:
-		# Capture and cache vision
 		await _capture_vision()
 
 
 func _exit_tree():
 	NPCManager.unregister_npc(self)
 	_disconnect_groq_signals()
+
+# ============ GREETING GENERATION ============
+
+func _generate_initial_greeting():
+	"""Generate a unique greeting using AI based on NPC context."""
+	if greeting_generated or is_generating_greeting:
+		return
+	
+	is_generating_greeting = true
+	print("[", npc_name, "] Generating initial greeting...")
+	
+	# Build greeting generation prompt
+	var greeting_prompt = _build_greeting_prompt()
+	
+	# Temporarily connect to response handlers for greeting generation
+	if using_groq:
+		# For Groq, we'll use a one-shot connection
+		if groq_provider:
+			groq_provider.response_finished.connect(_on_greeting_generated, CONNECT_ONE_SHOT)
+			groq_provider.request_failed.connect(_on_greeting_failed, CONNECT_ONE_SHOT)
+			
+			# Send greeting generation request
+			groq_provider.set_system_prompt("You are a creative writer. Generate realistic NPC dialogue.")
+			groq_provider.ask(greeting_prompt, [])
+	else:
+		# For local, we'll use a one-shot connection
+		if chat_node:
+			chat_node.response_finished.connect(_on_greeting_generated, CONNECT_ONE_SHOT)
+			
+			# Send greeting generation request
+			chat_node.system_prompt = "You are a creative writer. Generate realistic NPC dialogue."
+			chat_node.ask(greeting_prompt)
+
+
+func _build_greeting_prompt() -> String:
+	"""Build the prompt for greeting generation."""
+	var prompt = """Generate a SHORT greeting (1-2 sentences maximum) for this NPC to say when first meeting the player.
+
+# CHARACTER INFO:
+Name: {name}
+Personality: {personality}
+Background: {background}
+Current Mood: {mood}
+Location: {location}
+
+# RULES:
+1. Stay in character
+2. Make it natural and conversational
+3. NO action descriptions like *smiles* or (waves)
+4. 1-2 sentences ONLY
+5. Speak as the character would based on their personality
+6. Consider their current mood
+
+Generate ONLY the greeting text, nothing else:"""
+	
+	return prompt.format({
+		"name": npc_name,
+		"personality": npc_personality,
+		"background": npc_background,
+		"mood": get_mood_description(),
+		"location": npc_location
+	})
+
+
+func _on_greeting_generated(greeting_text: String):
+	"""Called when AI finishes generating the greeting."""
+	is_generating_greeting = false
+	
+	# Clean the generated greeting
+	var cleaned = greeting_text.strip_edges()
+	
+	# Remove any remaining action markers
+	if remove_action_markers:
+		cleaned = clean_response(cleaned)
+	
+	# Remove mood tags if present
+	cleaned = _strip_mood_tags(cleaned)
+	
+	# Fallback if something went wrong
+	if cleaned.is_empty() or cleaned.length() > 200:
+		print("[", npc_name, "] Generated greeting invalid, using fallback")
+		generated_greeting = greeting
+	else:
+		generated_greeting = cleaned
+		print("[", npc_name, "] Generated greeting: ", generated_greeting)
+	
+	greeting_generated = true
+	greeting_generation_complete.emit(generated_greeting)
+	
+	# Automatically display the greeting as if NPC initiated conversation
+	_auto_display_greeting()
+
+
+func _on_greeting_failed(error: String):
+	"""Called if greeting generation fails."""
+	is_generating_greeting = false
+	print("[", npc_name, "] Greeting generation failed: ", error, " - using fallback")
+	generated_greeting = greeting
+	greeting_generated = true
+	greeting_generation_complete.emit(generated_greeting)
+	
+	# Still auto-display even with fallback greeting
+	_auto_display_greeting()
+
+
+func _auto_display_greeting():
+	"""Automatically display the greeting in DialogueUI as if NPC initiated conversation."""
+	# Mark as talking
+	is_talking = true
+	current_response = generated_greeting
+	
+	# Add to conversation history
+	if enable_memory:
+		conversation_history.append({"role": "assistant", "content": generated_greeting})
+	
+	# Show DialogueUI WITHOUT opening input (just show NPC text)
+	DialogueUI.show_dialogue(self, false)  # false = don't show input
+	
+	# Emit as dialogue_updated first to trigger typewriter effect
+	dialogue_updated.emit(generated_greeting)
+	
+	# Then emit finished to mark completion
+	dialogue_finished.emit(generated_greeting)
+	
+	# Speak the greeting if both voice and auto-speak are enabled
+	if enable_voice and speak_greeting:
+		_speak(generated_greeting)
+	
+	print("[", npc_name, "] Auto-displayed greeting: ", generated_greeting)
+
 
 # ============ MOOD SYSTEM ============
 
@@ -415,7 +556,7 @@ func _detect_initial_room():
 
 
 func _setup_vision():
-	vision_viewport = get_node_or_null("VisionViewport")
+	vision_viewport = get_node_or_null("AnimeBoy/Camera3D/SubViewport")
 	
 	if not vision_viewport:
 		vision_viewport = SubViewport.new()
@@ -603,33 +744,37 @@ func _build_spatial_context() -> String:
 # ============ CONVERSATION ============
 
 func start_conversation():
+	"""Called when player presses Enter to talk to NPC."""
 	is_talking = true
-	current_response = ""
-	
-	# ✅ DON'T STOP AUDIO - Let previous conversation finish
 	
 	if enable_forgetting and forget_timer:
 		forget_timer.stop()
 	
+	# Show DialogueUI
 	DialogueUI.show_dialogue(self)
 	
-	if enable_memory and not conversation_history.is_empty():
+	# If greeting was already auto-displayed, don't show it again
+	# Just open the input field for player to type
+	if greeting_generated:
+		# Greeting already shown, just emit empty to open input
 		dialogue_finished.emit("")
 	else:
+		# No greeting generated yet (shouldn't happen if generate_greeting_on_start is true)
+		# Use fallback greeting
+		var greeting_to_use = greeting
+		
 		if enable_memory:
-			conversation_history.append({"role": "assistant", "content": greeting})
-		current_response = greeting
-		dialogue_finished.emit(greeting)
+			conversation_history.append({"role": "assistant", "content": greeting_to_use})
+		
+		current_response = greeting_to_use
+		dialogue_finished.emit(greeting_to_use)
 		
 		if speak_greeting:
-			_speak(greeting)
+			_speak(greeting_to_use)
 
 
 func end_conversation():
 	is_talking = false
-	
-	# ✅ DON'T STOP AUDIO - Let it finish naturally in background
-	# Audio will only stop when new audio starts (in _speak)
 	
 	if enable_forgetting and forget_timer:
 		forget_timer.start(forget_delay)
@@ -641,9 +786,6 @@ func talk_to_npc(message: String):
 		trim_conversation_history()
 	
 	current_response = ""
-	
-	# ✅ DON'T STOP AUDIO - Let previous response play while AI thinks!
-	# Audio will only stop when new audio starts in _speak()
 	
 	# Rebuild system prompt with current mood
 	system_prompt = build_system_prompt()
@@ -773,9 +915,7 @@ func _speak(text: String):
 	if not kokoro_tts.is_available():
 		return
 	
-	# ✅ THIS IS THE ONLY PLACE AUDIO STOPS!
 	# Stop previous voice only when NEW audio is ready to play
-	# This ensures previous audio plays until replacement is ready
 	if voice_player and voice_player.playing:
 		voice_player.stop()
 		is_speaking = false
