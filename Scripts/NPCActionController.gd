@@ -142,6 +142,13 @@ func _play_animation_with_tree(anim_name: String) -> bool:
 	
 	current_animation = anim_name
 	is_animation_playing = true
+	
+	# Disable the LookAtModifier3D's "SkeletonModifier3D"'s "Active" parameter
+	if anim_name != "idle" or anim_name != "sitting" or anim_name != "walking":
+		look_at_modifier_3d.active = false
+	else:
+		look_at_modifier_3d.active = true
+		
 	state_machine.travel(actual_anim)
 	action_started.emit(anim_name)
 	
@@ -161,9 +168,6 @@ func _play_animation_with_player(anim_name: String) -> bool:
 	animation_player.play(actual_anim)
 	action_started.emit(anim_name)
 	_wait_for_animation_finish(anim_name)
-	# Supposed to disable the LookAtModifier3D's "SkeletonModifier3D"'s "Active", but probably not working
-	if anim_name != "idle" or anim_name != "sitting" or anim_name != "walking":
-		look_at_modifier_3d.active = false
 	return true
 
 func _wait_for_animation_finish(anim_name: String):
