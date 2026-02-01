@@ -2,7 +2,6 @@ extends Node
 class_name NPCActionParser
 
 ## Parses LLM responses for embedded action commands
-## Allows the AI to naturally trigger animations and movement
 
 signal action_detected(action_dict: Dictionary)
 
@@ -17,8 +16,8 @@ var action_patterns: Dictionary = {
 	# [look_at:Player] or [look:bookshelf]
 	"look": r"\[look(?:_at)?:([^\]]+)\]",
 	
-	# [stop_looking] or [stop_moving]
-	"stop": r"\[(stop_(?:looking|moving))\]"
+	# [stop_looking], [stop_moving], or [stop_animation]  # UPDATED
+	"stop": r"\[(stop_(?:looking|moving|animation))\]"
 }
 
 # Compiled regex (cached for performance)
@@ -85,6 +84,7 @@ func _build_action_dict(pattern_type: String, regex_match: RegExMatch) -> Dictio
 	return {}
 
 ## Generate context for LLM about available actions
+## UPDATED - Reflects all available animations and new stop_animation command
 static func get_action_system_prompt() -> String:
 	return """
 # PHYSICAL ACTIONS
@@ -95,42 +95,63 @@ You can perform actions by embedding special tags in your responses. These tags 
 
 1. **Movement**:
    - [walk_to:LocationName] - Walk to a location (Kitchen, Player, Bedroom, etc.)
-   - [stop_moving] - Stop walking
+   - [stop_moving] - Stop walking immediately
    
 2. **Animations**:
-   - [animate:idle] - Stand idle
+   - [animate:idle] - Stand idle (default stance)
    - [animate:walk] - Walking animation (auto-triggers when moving)
    - [animate:sit] - Sit down
-   - [animate:dance] - Dance
-   - [animate:wave] - Wave
-   - [animate:talk] - Talking gesture
+   - [animate:dance] - Dance (Dance1)
+   - [animate:wave] - Wave gesture
+   - [animate:talk] - Talking gesture/animation
+   - [animate:macarena] - Macarena dance
+   - [animate:chickendance] - Chicken dance
+   - [animate:tennadance] - Tenna dance
+   - [animate:breakdance1] - Breakdancing
+   - [animate:tpose] - T-pose
+   - [stop_animation] - Stop current animation and return to idle
    
 3. **Head Tracking**:
    - [look_at:Player] - Look at the player
    - [look_at:ObjectName] - Look at a specific object/location
-   - [stop_looking] - Return head to neutral
+   - [stop_looking] - Return head to neutral position
+
+## Important Notes:
+- Animations can now be INTERRUPTED - you can start a new animation any time
+- Use [stop_animation] to immediately return to idle stance
+- Multiple tags can be used in one response
+- Actions execute in the order they appear
+- Tags are HIDDEN from the player (they only see your words)
 
 ## Usage Examples:
 
 Player: "Could you come over here?"
 You: "Of course! On my way. [walk_to:Player] [look_at:Player]"
 
+Player: "Stop dancing and sit down."
+You: "Alright, alright! [stop_animation] [animate:sit]"
+
 Player: "What's in the kitchen?"
 You: "Let me check. [walk_to:Kitchen] Hmm, not much here."
 
-Player: "Dance for me!"
-You: "Alright, here goes! [animate:dance]"
+Player: "Wave at me!"
+You: "Hey there! [animate:wave] [look_at:Player]"
 
-Player: "Sit down and relax"
-You: "Don't mind if I do. [animate:sit] [stop_looking]"
+Player: "Dance for me!"
+You: "You got it! [animate:dance]"
+
+Player: "Actually, do the macarena instead"
+You: "Oh, switching it up! [animate:macarena]"
+
+Player: "Nevermind, just stop"
+You: "Okay, back to normal. [stop_animation]"
 
 ## Rules:
-- Tags are HIDDEN from the player (they only see your words)
-- You can use multiple tags in one response
-- Actions execute in the order they appear
-- Movement is automatic - you don't need to say "I'm walking to..."
-- Use actions naturally when they make sense for the conversation
+- Use actions naturally when they make sense
 - Don't overuse - not every response needs an action
+- You can interrupt your own animations now
+- Movement and head tracking can happen simultaneously
+- Walking automatically triggers the walk animation
 """
 
 ## Check if a location exists in the scene

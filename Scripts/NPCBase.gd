@@ -107,7 +107,9 @@ enum VoicePreset {
 @onready var npc_camera: Camera3D = $AnimeBoy/Camera3D
 @onready var action_controller: NPCActionController = $ActionController
 @onready var action_parser: NPCActionParser = $ActionParser
+@export var look_at_modifier_3d: LookAtModifier3D
 @export var nav_agent: NavigationAgent3D
+@export var non_ai_vision: Area3D
 
 var SPEED = 1
 var nav_target: Vector3
@@ -685,18 +687,16 @@ func _process(_delta):
 
 
 func _physics_process(delta):
-	# Old navigation code (kept for compatibility)
-	if nav_target != Vector3.ZERO:
-		look_at(nav_target)
-		rotation.x = 0
-		rotation.z = 0
-		
-		if position.distance_to(nav_target) > 0.5:
-			var current_location = global_transform.origin
-			var next_location = nav_agent.get_next_path_position()
-			var new_velocity = (next_location - current_location).normalized() * SPEED
-			velocity = new_velocity
-			move_and_slide()
+	# Apply gravity (if not on floor)
+	if not is_on_floor():
+		velocity.y -= 9.8 * delta  # Gravity
+	
+	# Get movement velocity from ActionController
+	if enable_actions and action_controller:
+		var movement_velocity = action_controller.get_movement_velocity()
+		velocity.x = movement_velocity.x
+		velocity.z = movement_velocity.z
+	move_and_slide()
 
 # ============ AI PROVIDER SETUP ============
 
@@ -1210,3 +1210,12 @@ func get_action_state() -> String:
 	if enable_actions and action_controller:
 		return action_controller.get_state_description()
 	return "Actions disabled"
+
+## Headtracking
+func _on_timer_timeout() -> void:
+	var player: CharacterBody3D = get_tree().get_first_node_in_group("player")
+	var bodies = non_ai_vision.get_overlapping_bodies()
+	if player in bodies:
+		look_at_modifier_3d.target_node = player.get_child(0).get_child(0).get_path()
+	else:
+		look_at_modifier_3d.target_node = ""
