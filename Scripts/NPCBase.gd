@@ -1,7 +1,8 @@
 extends CharacterBody3D
 
-## Enhanced NPC with mood system, expressive TTS, and AUTO-GENERATED GREETINGS
+## Enhanced NPC with mood system, expressive TTS, AUTO-GENERATED GREETINGS, and ACTIONS
 ## Generates unique greeting on spawn using AI based on character context
+## Can now perform animations, navigation, and head tracking via LLM commands
 
 # ============ ENUMS ============
 
@@ -93,12 +94,23 @@ enum VoicePreset {
 @export var remove_parentheses: bool = true
 @export var remove_brackets: bool = true
 
+# Action System settings
+@export_group("Action System")
+@export var enable_actions: bool = true ## Enable LLM-controlled actions (animations, movement, head tracking)
+@export var auto_look_at_player: bool = true ## Automatically look at player when talking
+
 # ============ INTERNAL STATE ============
 
 # References
 @onready var chat_node = $ChatNode
 @onready var vision_viewport: SubViewport = $AnimeBoy/Camera3D/SubViewport
 @onready var npc_camera: Camera3D = $AnimeBoy/Camera3D
+@onready var action_controller: NPCActionController = $ActionController
+@onready var action_parser: NPCActionParser = $ActionParser
+@export var nav_agent: NavigationAgent3D
+
+var SPEED = 1
+var nav_target: Vector3
 
 # State
 var is_talking = false
@@ -132,6 +144,10 @@ var kokoro_tts: KokoroTTS = null
 var voice_player: AudioStreamPlayer3D = null
 var is_speaking: bool = false
 
+# Action system state
+var pending_actions: Array = []
+var is_executing_action: bool = false
+
 # ============ SIGNALS ============
 
 signal dialogue_updated(text: String)
@@ -140,6 +156,7 @@ signal voice_started()
 signal voice_finished()
 signal mood_changed(old_mood: Mood, new_mood: Mood)
 signal greeting_generation_complete(greeting_text: String)
+signal action_executed(action_name: String)
 
 # ============ MOOD DESCRIPTIONS ============
 
@@ -197,6 +214,10 @@ func _ready():
 	if enable_voice:
 		_setup_voice()
 	
+	# Setup action system BEFORE building system prompt
+	if enable_actions:
+		_setup_actions()
+	
 	system_prompt = build_system_prompt()
 	_setup_provider()
 	AIManager.provider_changed.connect(_on_provider_changed)
@@ -227,7 +248,7 @@ func _ready():
 	
 	NPCManager.register_npc(self)
 	
-	print(npc_name, " ready! Mood: ", Mood.keys()[current_mood], ", Voice: ", VoicePreset.keys()[voice_preset])
+	print(npc_name, " ready! Mood: ", Mood.keys()[current_mood], ", Voice: ", VoicePreset.keys()[voice_preset], ", Actions: ", enable_actions)
 	
 	# Generate greeting AFTER everything is set up
 	if generate_greeting_on_start:
@@ -243,6 +264,72 @@ func _on_vision_timer_timeout():
 func _exit_tree():
 	NPCManager.unregister_npc(self)
 	_disconnect_groq_signals()
+
+# ============ ACTION SYSTEM SETUP ============
+
+func _setup_actions():
+	"""Setup the action controller and parser for LLM-controlled actions."""
+	if not action_controller:
+		push_warning("[", npc_name, "] ActionController not found! Add an ActionController node to the NPC.")
+		enable_actions = false
+		return
+	
+	if not action_parser:
+		push_warning("[", npc_name, "] ActionParser not found! Add an ActionParser node to the NPC.")
+		enable_actions = false
+		return
+	
+	# Connect action parser signals
+	action_parser.action_detected.connect(_on_action_detected)
+	
+	# Connect action controller signals
+	if action_controller.has_signal("action_completed"):
+		action_controller.action_completed.connect(_on_action_completed)
+	
+	print("[", npc_name, "] Action system initialized")
+
+
+func _on_action_detected(action_dict: Dictionary):
+	"""Called when the action parser detects an action in LLM response."""
+	if not enable_actions:
+		return
+	
+	print("[", npc_name, "] 🎬 Action detected: ", action_dict)
+	
+	# Queue the action for execution
+	pending_actions.append(action_dict)
+	
+	# Start executing if not already doing so
+	if not is_executing_action:
+		_execute_next_action()
+
+
+func _execute_next_action():
+	"""Execute the next action in the queue."""
+	if pending_actions.is_empty():
+		is_executing_action = false
+		return
+	
+	is_executing_action = true
+	var action = pending_actions.pop_front()
+	
+	print("[", npc_name, "] ▶️  Executing: ", action)
+	
+	if action_controller:
+		var success = await action_controller.execute_action(action)
+		
+		if success:
+			action_executed.emit(action.get("action", "unknown"))
+		else:
+			push_warning("[", npc_name, "] Action failed: ", action)
+	
+	# Execute next action
+	_execute_next_action()
+
+
+func _on_action_completed(action_name: String):
+	"""Called when an action completes."""
+	print("[", npc_name, "] ✅ Action completed: ", action_name)
 
 # ============ GREETING GENERATION ============
 
@@ -321,6 +408,11 @@ func _on_greeting_generated(greeting_text: String):
 	# Remove mood tags if present
 	cleaned = _strip_mood_tags(cleaned)
 	
+	# Parse and remove action tags (greeting shouldn't have actions, but just in case)
+	if enable_actions and action_parser:
+		var parsed = action_parser.parse_response(cleaned)
+		cleaned = parsed["text"]
+	
 	# Fallback if something went wrong
 	if cleaned.is_empty() or cleaned.length() > 200:
 		print("[", npc_name, "] Generated greeting invalid, using fallback")
@@ -370,6 +462,12 @@ func _auto_display_greeting():
 	# Speak the greeting if both voice and auto-speak are enabled
 	if enable_voice and speak_greeting:
 		_speak(generated_greeting)
+	
+	# Auto look at player if enabled
+	if enable_actions and auto_look_at_player and action_controller:
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			action_controller.look_at_node(player)
 	
 	print("[", npc_name, "] Auto-displayed greeting: ", generated_greeting)
 
@@ -585,6 +683,21 @@ func _process(_delta):
 		if viewport_camera:
 			viewport_camera.global_transform = npc_camera.global_transform
 
+
+func _physics_process(delta):
+	# Old navigation code (kept for compatibility)
+	if nav_target != Vector3.ZERO:
+		look_at(nav_target)
+		rotation.x = 0
+		rotation.z = 0
+		
+		if position.distance_to(nav_target) > 0.5:
+			var current_location = global_transform.origin
+			var next_location = nav_agent.get_next_path_position()
+			var new_velocity = (next_location - current_location).normalized() * SPEED
+			velocity = new_velocity
+			move_and_slide()
+
 # ============ AI PROVIDER SETUP ============
 
 func _setup_provider():
@@ -669,6 +782,13 @@ Player: "Your shop is garbage!"
 You: "Excuse me?! Get out of my shop! [mood:angry]"
 """
 
+	# Add action system instructions if enabled
+	if enable_actions and action_parser:
+		prompt += """
+# PHYSICAL ACTIONS:
+{action_instructions}
+"""
+
 	if enable_vision:
 		prompt += """
 # VISION:
@@ -700,7 +820,7 @@ Location: {location_lore}
 
 Speak naturally as {name} would. Your mood affects HOW you say things."""
 
-	return prompt.format({
+	var format_map = {
 		"name": npc_name,
 		"max_length": max_response_length,
 		"mood_name": Mood.keys()[current_mood],
@@ -714,8 +834,15 @@ Speak naturally as {name} would. Your mood affects HOW you say things."""
 		"player_appearance": player_appearance,
 		"world_lore": WorldLore.WORLD_LORE,
 		"location_lore": WorldLore.get_location_lore(npc_location),
-		"spatial_context": _build_spatial_context()
-	})
+		"spatial_context": _build_spatial_context(),
+		"action_instructions": ""  # Will be filled if actions enabled
+	}
+	
+	# Add action instructions if enabled
+	if enable_actions and action_parser:
+		format_map["action_instructions"] = NPCActionParser.get_action_system_prompt()
+	
+	return prompt.format(format_map)
 
 
 func _build_spatial_context() -> String:
@@ -750,6 +877,12 @@ func start_conversation():
 	if enable_forgetting and forget_timer:
 		forget_timer.stop()
 	
+	# Auto look at player when conversation starts
+	if enable_actions and auto_look_at_player and action_controller:
+		var player = get_tree().get_first_node_in_group("player")
+		if player:
+			action_controller.look_at_node(player)
+	
 	# Show DialogueUI
 	DialogueUI.show_dialogue(self)
 	
@@ -776,6 +909,10 @@ func start_conversation():
 func end_conversation():
 	is_talking = false
 	
+	# Stop looking at player
+	if enable_actions and action_controller:
+		action_controller.stop_looking()
+	
 	if enable_forgetting and forget_timer:
 		forget_timer.start(forget_delay)
 
@@ -787,7 +924,7 @@ func talk_to_npc(message: String):
 	
 	current_response = ""
 	
-	# Rebuild system prompt with current mood
+	# Rebuild system prompt with current mood and state
 	system_prompt = build_system_prompt()
 	
 	if using_groq:
@@ -856,6 +993,8 @@ func _on_response_token(token: String):
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
 	cleaned = _strip_mood_tags(cleaned)
+	
+	# Don't strip action tags during streaming (we'll do it at the end)
 	dialogue_updated.emit(cleaned)
 
 
@@ -869,6 +1008,8 @@ func _on_groq_response_updated(text: String):
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
 	cleaned = _strip_mood_tags(cleaned)
+	
+	# Don't strip action tags during streaming
 	dialogue_updated.emit(cleaned)
 
 
@@ -884,8 +1025,20 @@ func _process_response(full_response: String):
 	# Detect and apply mood from response
 	_detect_mood_from_response(full_response)
 	
+	# Parse for actions BEFORE cleaning
+	var parsed_text = full_response
+	var detected_actions = []
+	
+	if enable_actions and action_parser:
+		var parsed = action_parser.parse_response(full_response)
+		parsed_text = parsed["text"]
+		detected_actions = parsed["actions"]
+		
+		print("[", npc_name, "] 📝 Response text: ", parsed_text)
+		print("[", npc_name, "] 🎬 Detected ", detected_actions.size(), " action(s)")
+	
 	# Clean response
-	var cleaned = full_response
+	var cleaned = parsed_text
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
 	cleaned = _strip_mood_tags(cleaned)
@@ -969,7 +1122,7 @@ func stop_speaking():
 func trim_conversation_history():
 	if not enable_memory:
 		return
-		
+	
 	var max_messages = max_history_turns * 2
 	if conversation_history.size() > max_messages:
 		var to_remove = conversation_history.size() - max_messages
@@ -980,7 +1133,13 @@ func trim_conversation_history():
 func reset_conversation():
 	conversation_history.clear()
 	set_mood(default_mood)
-
+	
+	# Stop any ongoing actions
+	if enable_actions and action_controller:
+		pending_actions.clear()
+		is_executing_action = false
+		action_controller.stop_looking()
+		action_controller.stop_moving()
 
 # ============ RESPONSE CLEANING ============
 
@@ -1012,3 +1171,42 @@ func clean_response(text: String) -> String:
 	cleaned = cleaned.replace(" ?", "?")
 	
 	return cleaned
+
+# ============ Navigation Agent ============
+
+func update_target_location(target: Vector3):
+	"""Legacy function - kept for compatibility. Use action_controller instead."""
+	nav_target = target
+	if nav_agent:
+		nav_agent.set_target_position(target)
+
+
+# ============ PUBLIC ACTION API ============
+
+## Manually trigger an animation
+func play_animation(anim_name: String) -> bool:
+	if enable_actions and action_controller:
+		return await action_controller.play_animation(anim_name)
+	return false
+
+
+## Manually move to a position
+func move_to(target_pos: Vector3):
+	if enable_actions and action_controller:
+		action_controller.move_to_position(target_pos)
+
+
+## Manually look at a target
+func look_at_target(target):
+	if enable_actions and action_controller:
+		if target is Node3D:
+			action_controller.look_at_node(target)
+		elif target is Vector3:
+			action_controller.look_at_position(target)
+
+
+## Get current action state for debugging
+func get_action_state() -> String:
+	if enable_actions and action_controller:
+		return action_controller.get_state_description()
+	return "Actions disabled"

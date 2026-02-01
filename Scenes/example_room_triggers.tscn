@@ -8,6 +8,78 @@
 [ext_resource type="PackedScene" uid="uid://5j3g3jx65e7m" path="res://Scenes/npc_base.tscn" id="4_kakeu"]
 [ext_resource type="Shader" uid="uid://c3x7twt1tsa5d" path="res://Shaders/cel/cel-shader-base.gdshader" id="4_v6w0w"]
 
+[sub_resource type="Shader" id="Shader_7fwq4"]
+code = "
+// NOTE: Shader automatically converted from Godot Engine 4.6.stable's PanoramaSkyMaterial.
+
+shader_type sky;
+
+uniform sampler2D source_panorama : filter_linear, source_color, hint_default_black;
+uniform float exposure : hint_range(0, 128) = 1.0;
+uniform float speed = 0.002;
+
+void sky() {
+	vec2 skyCoords = vec2(SKY_COORDS.x + TIME * speed, SKY_COORDS.y);
+	
+	COLOR = texture(source_panorama, skyCoords).rgb * exposure;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_f36oo"]
+shader = SubResource("Shader_7fwq4")
+shader_parameter/source_panorama = ExtResource("4_f6wdd")
+shader_parameter/exposure = 1.0
+shader_parameter/speed = 0.001
+
+[sub_resource type="Sky" id="Sky_tyhie"]
+sky_material = SubResource("ShaderMaterial_f36oo")
+radiance_size = 2
+
+[sub_resource type="Environment" id="Environment_f8w8m"]
+background_mode = 2
+background_intensity = 100000.0
+sky = SubResource("Sky_tyhie")
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 4
+ssao_enabled = true
+ssao_detail = 2.0
+sdfgi_enabled = true
+sdfgi_bounce_feedback = 0.9
+glow_normalized = true
+glow_bloom = 0.2
+volumetric_fog_density = 0.01
+volumetric_fog_gi_inject = 1.14
+volumetric_fog_anisotropy = 0.7
+volumetric_fog_sky_affect = 0.295
+adjustment_saturation = 1.17
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_qo5hu"]
+exposure_multiplier = 3.069
+auto_exposure_scale = 0.22
+auto_exposure_speed = 0.8
+dof_blur_far_distance = 1.44
+dof_blur_near_distance = 0.01
+auto_exposure_min_sensitivity = 8.01
+
+[sub_resource type="Compositor" id="Compositor_l3p17"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_d5bq8"]
+render_priority = 0
+next_pass = ExtResource("3_ax78n")
+shader = ExtResource("4_v6w0w")
+shader_parameter/color = Color(0.99999994, 0.70344526, 0.34826308, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="NavigationMesh" id="NavigationMesh_f36oo"]
+vertices = PackedVector3Array(3.75, 0.5, 3.5, 5.75, 0.5, 3.5, 5.75, 0.5, -3.5, 3.75, 0.5, -3.5, -3.5, 0.5, 4.25, 3.5, 0.5, 4.25, 3.5, 0.5, -4.5, -3.5, 0.5, -4.5, 9.5, 0.5, 3.5, 9.5, 0.5, -3.5, 5.5, 0.5, 7.5, 5.5, 0.5, 5.25, 3.75, 0.5, 5.25, 3.25, 0.5, 7.5, -3, 0.5, 9.75, 3, 0.5, 9.75, -3.25, 0.5, 7.5, -3.75, 0.5, 5.25, -5.5, 0.5, 5.25, -5.5, 0.5, 7.5, -3, 0.5, 16.5, 3, 0.5, 16.5)
+polygons = [PackedInt32Array(3, 2, 0), PackedInt32Array(0, 2, 1), PackedInt32Array(5, 4, 0), PackedInt32Array(0, 4, 3), PackedInt32Array(3, 4, 6), PackedInt32Array(6, 4, 7), PackedInt32Array(2, 9, 1), PackedInt32Array(1, 9, 8), PackedInt32Array(11, 10, 12), PackedInt32Array(12, 10, 13), PackedInt32Array(16, 4, 14), PackedInt32Array(14, 4, 15), PackedInt32Array(15, 4, 13), PackedInt32Array(13, 4, 5), PackedInt32Array(18, 17, 19), PackedInt32Array(19, 17, 16), PackedInt32Array(4, 16, 17), PackedInt32Array(5, 12, 13), PackedInt32Array(21, 20, 15), PackedInt32Array(15, 20, 14)]
+cell_height = 0.2
+agent_height = 2.0
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_living_trigger"]
 size = Vector3(8, 4, 10)
 
@@ -100,179 +172,10 @@ shader_parameter/uv_offset = Vector2(0, 0)
 [sub_resource type="BoxShape3D" id="BoxShape3D_hallway_floor"]
 size = Vector3(12, 0.2, 3)
 
-[sub_resource type="Shader" id="Shader_7fwq4"]
-code = "
-// NOTE: Shader automatically converted from Godot Engine 4.6.stable's PanoramaSkyMaterial.
-
-shader_type sky;
-
-uniform sampler2D source_panorama : filter_linear, source_color, hint_default_black;
-uniform float exposure : hint_range(0, 128) = 1.0;
-uniform float speed = 0.002;
-
-void sky() {
-	vec2 skyCoords = vec2(SKY_COORDS.x + TIME * speed, SKY_COORDS.y);
-	
-	COLOR = texture(source_panorama, skyCoords).rgb * exposure;
-}
-"
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_f36oo"]
-shader = SubResource("Shader_7fwq4")
-shader_parameter/source_panorama = ExtResource("4_f6wdd")
-shader_parameter/exposure = 1.0
-shader_parameter/speed = 0.001
-
-[sub_resource type="Sky" id="Sky_tyhie"]
-sky_material = SubResource("ShaderMaterial_f36oo")
-radiance_size = 2
-
-[sub_resource type="Environment" id="Environment_f8w8m"]
-background_mode = 2
-background_intensity = 100000.0
-sky = SubResource("Sky_tyhie")
-ambient_light_source = 3
-reflected_light_source = 2
-tonemap_mode = 4
-ssao_enabled = true
-ssao_detail = 2.0
-sdfgi_enabled = true
-sdfgi_bounce_feedback = 0.9
-glow_normalized = true
-glow_bloom = 0.2
-volumetric_fog_density = 0.01
-volumetric_fog_gi_inject = 1.14
-volumetric_fog_anisotropy = 0.7
-volumetric_fog_sky_affect = 0.295
-adjustment_saturation = 1.17
-
-[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_qo5hu"]
-exposure_multiplier = 3.069
-auto_exposure_scale = 0.22
-auto_exposure_speed = 0.8
-dof_blur_far_distance = 1.44
-dof_blur_near_distance = 0.01
-auto_exposure_min_sensitivity = 8.01
-
-[sub_resource type="Compositor" id="Compositor_l3p17"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_d5bq8"]
-render_priority = 0
-next_pass = ExtResource("3_ax78n")
-shader = ExtResource("4_v6w0w")
-shader_parameter/color = Color(0.99999994, 0.70344526, 0.34826308, 1)
-shader_parameter/specular = Color(0, 0, 0, 1)
-shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
-shader_parameter/uv_scale = Vector2(1, 1)
-shader_parameter/uv_offset = Vector2(0, 0)
-
 [node name="RoomTriggers" type="Node3D" unique_id=206421139]
 
 [node name="Character" parent="." unique_id=864869144 instance=ExtResource("2_m6lvx")]
 transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0.55779934, 0.099999905, 12.640925)
-
-[node name="LivingRoom" type="Area3D" parent="." unique_id=2085866546]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
-script = ExtResource("1_room")
-room_description = "A dark living room. The fireplace is cold. Shadows dance in the corners."
-
-[node name="TriggerCollision" type="CollisionShape3D" parent="LivingRoom" unique_id=1356217466]
-shape = SubResource("BoxShape3D_living_trigger")
-
-[node name="Floor" type="StaticBody3D" parent="LivingRoom" unique_id=1940976774]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="LivingRoom/Floor" unique_id=1607656355]
-mesh = SubResource("BoxMesh_living_floor")
-surface_material_override/0 = SubResource("ShaderMaterial_ax78n")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="LivingRoom/Floor" unique_id=768733528]
-shape = SubResource("BoxShape3D_living_floor")
-
-[node name="Label3D" type="Label3D" parent="LivingRoom" unique_id=97951919]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
-pixel_size = 0.01
-text = "LIVING ROOM"
-font_size = 64
-outline_size = 8
-
-[node name="Kitchen" type="Area3D" parent="." unique_id=1007973208]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2, 0)
-script = ExtResource("1_room")
-room_name = "Kitchen"
-room_description = "A modest kitchen with white tile floors. The knives are kept in a block on the counter."
-
-[node name="TriggerCollision" type="CollisionShape3D" parent="Kitchen" unique_id=2087261618]
-shape = SubResource("BoxShape3D_kitchen_trigger")
-
-[node name="Floor" type="StaticBody3D" parent="Kitchen" unique_id=531152814]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Kitchen/Floor" unique_id=11090530]
-mesh = SubResource("BoxMesh_kitchen_floor")
-surface_material_override/0 = SubResource("ShaderMaterial_j7ulc")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Kitchen/Floor" unique_id=2050931109]
-shape = SubResource("BoxShape3D_kitchen_floor")
-
-[node name="Label3D" type="Label3D" parent="Kitchen" unique_id=993019879]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
-pixel_size = 0.01
-text = "KITCHEN"
-font_size = 64
-outline_size = 8
-
-[node name="Bedroom" type="Area3D" parent="." unique_id=1937565543]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 12.494954)
-script = ExtResource("1_room")
-room_name = "Master Bedroom"
-room_description = "A lavish bedroom with a large bed. Photos of you are scattered on the nightstand."
-
-[node name="TriggerCollision" type="CollisionShape3D" parent="Bedroom" unique_id=1833079646]
-shape = SubResource("BoxShape3D_bedroom_trigger")
-
-[node name="Floor" type="StaticBody3D" parent="Bedroom" unique_id=1508904013]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Bedroom/Floor" unique_id=2131593432]
-mesh = SubResource("BoxMesh_bedroom_floor")
-surface_material_override/0 = SubResource("ShaderMaterial_v6w0w")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Bedroom/Floor" unique_id=320659949]
-shape = SubResource("BoxShape3D_bedroom_floor")
-
-[node name="Label3D" type="Label3D" parent="Bedroom" unique_id=1727693088]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
-pixel_size = 0.01
-text = "MASTER BEDROOM"
-font_size = 64
-outline_size = 8
-
-[node name="Hallway" type="Area3D" parent="." unique_id=658510425]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 6.494954)
-script = ExtResource("1_room")
-room_name = "Hallway"
-room_description = "A narrow hallway connecting the rooms. The floorboards creak with every step."
-
-[node name="TriggerCollision" type="CollisionShape3D" parent="Hallway" unique_id=935644509]
-shape = SubResource("BoxShape3D_hallway_trigger")
-
-[node name="Floor" type="StaticBody3D" parent="Hallway" unique_id=1634462253]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Hallway/Floor" unique_id=482812104]
-mesh = SubResource("BoxMesh_hallway_floor")
-surface_material_override/0 = SubResource("ShaderMaterial_5pcn1")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Hallway/Floor" unique_id=546097477]
-shape = SubResource("BoxShape3D_hallway_floor")
-
-[node name="Label3D" type="Label3D" parent="Hallway" unique_id=1987049565]
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
-pixel_size = 0.01
-text = "HALLWAY"
-font_size = 64
-outline_size = 8
 
 [node name="WorldEnvironment" parent="." unique_id=1160414132 instance=ExtResource("3_l3p17")]
 environment = SubResource("Environment_f8w8m")
@@ -295,7 +198,7 @@ greeting = "Mama Mia!"
 enable_vision = true
 voice_preset = 5
 
-[node name="Skeleton3D" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature" parent_id_path=PackedInt32Array(1002337649, 1273267177, 856446177) index="0" unique_id=938120867]
+[node name="Skeleton3D" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature" parent_id_path=PackedInt32Array(1002337649, 1273267177, 2092164116) index="0" unique_id=345595133]
 bones/0/position = Vector3(16.343008, -12.39035, -7457.597)
 bones/0/rotation = Quaternion(-0.72777504, -0.054197423, 0.011620761, 0.68357235)
 bones/1/position = Vector3(4.005432e-05, 521.97864, -69.38031)
@@ -414,8 +317,114 @@ bones/63/position = Vector3(-5.0567258e-05, 1104.7289, 3.505469e-06)
 bones/63/rotation = Quaternion(0.33164665, 0.037413426, -0.01262282, 0.942577)
 bones/64/position = Vector3(5.4061413e-05, 438.50302, 0.00010490417)
 
-[node name="Body_PolySphere1_default_0" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature/Skeleton3D" index="0" unique_id=570337719]
+[node name="Body_PolySphere1_default_0" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature/Skeleton3D" index="0" unique_id=357483258]
 surface_material_override/0 = SubResource("ShaderMaterial_d5bq8")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1278560827]
+navigation_mesh = SubResource("NavigationMesh_f36oo")
+
+[node name="LivingRoom" type="Area3D" parent="NavigationRegion3D" unique_id=2085866546]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+script = ExtResource("1_room")
+room_description = "A dark living room. The fireplace is cold. Shadows dance in the corners."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/LivingRoom" unique_id=1356217466]
+shape = SubResource("BoxShape3D_living_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/LivingRoom" unique_id=1940976774]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/LivingRoom/Floor" unique_id=1607656355]
+mesh = SubResource("BoxMesh_living_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_ax78n")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/LivingRoom/Floor" unique_id=768733528]
+shape = SubResource("BoxShape3D_living_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/LivingRoom" unique_id=97951919]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "LIVING ROOM"
+font_size = 64
+outline_size = 8
+
+[node name="Kitchen" type="Area3D" parent="NavigationRegion3D" unique_id=1007973208]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 2, 0)
+script = ExtResource("1_room")
+room_name = "Kitchen"
+room_description = "A modest kitchen with white tile floors. The knives are kept in a block on the counter."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Kitchen" unique_id=2087261618]
+shape = SubResource("BoxShape3D_kitchen_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Kitchen" unique_id=531152814]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Kitchen/Floor" unique_id=11090530]
+mesh = SubResource("BoxMesh_kitchen_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_j7ulc")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Kitchen/Floor" unique_id=2050931109]
+shape = SubResource("BoxShape3D_kitchen_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Kitchen" unique_id=993019879]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "KITCHEN"
+font_size = 64
+outline_size = 8
+
+[node name="Bedroom" type="Area3D" parent="NavigationRegion3D" unique_id=1937565543]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 12.494954)
+script = ExtResource("1_room")
+room_name = "Master Bedroom"
+room_description = "A lavish bedroom with a large bed. Photos of you are scattered on the nightstand."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Bedroom" unique_id=1833079646]
+shape = SubResource("BoxShape3D_bedroom_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Bedroom" unique_id=1508904013]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Bedroom/Floor" unique_id=2131593432]
+mesh = SubResource("BoxMesh_bedroom_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_v6w0w")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Bedroom/Floor" unique_id=320659949]
+shape = SubResource("BoxShape3D_bedroom_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Bedroom" unique_id=1727693088]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "MASTER BEDROOM"
+font_size = 64
+outline_size = 8
+
+[node name="Hallway" type="Area3D" parent="NavigationRegion3D" unique_id=658510425]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 6.494954)
+script = ExtResource("1_room")
+room_name = "Hallway"
+room_description = "A narrow hallway connecting the rooms. The floorboards creak with every step."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Hallway" unique_id=935644509]
+shape = SubResource("BoxShape3D_hallway_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Hallway" unique_id=1634462253]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Hallway/Floor" unique_id=482812104]
+mesh = SubResource("BoxMesh_hallway_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_5pcn1")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Hallway/Floor" unique_id=546097477]
+shape = SubResource("BoxShape3D_hallway_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Hallway" unique_id=1987049565]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "HALLWAY"
+font_size = 64
+outline_size = 8
 
 [editable path="NPCBase_SpaghettiJim"]
 [editable path="NPCBase_SpaghettiJim/AnimeBoy"]
