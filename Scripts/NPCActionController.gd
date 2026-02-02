@@ -1,8 +1,6 @@
 extends Node
 class_name NPCActionController
 
-## ULTRA-SAFE VERSION - Minimal bone manipulation to avoid skeleton corruption
-
 signal action_started(action_name: String)
 signal action_completed(action_name: String)
 signal navigation_complete()
@@ -28,6 +26,7 @@ signal navigation_complete()
 @export var enable_walk_speed_scaling: bool = true
 @export var min_speed_scale: float = 0.5
 @export var max_speed_scale: float = 2.0
+var blend_params := {}
 
 # Current state
 var current_animation: String = "idle"
@@ -35,7 +34,7 @@ var is_moving: bool = false
 var desired_velocity: Vector3 = Vector3.ZERO
 var using_animation_tree: bool = false
 
-# Head tracking (DISABLED)
+# Head tracking
 var look_target_node: Node3D = null
 var is_looking: bool = false
 
@@ -45,45 +44,41 @@ var head_bone_idx: int = -1
 # Animation state
 var is_animation_playing: bool = false
 
-# Available animations
-var available_animations: Dictionary = {
+# Anim blend map
+const  AVAILABLE_ANIMATIONS: Dictionary = {
 	"idle": "Idle",
 	"walk": "Walk",
 	"sit": "Sit",
 	"dance": "Dance",
-	"breakdance": "Breakdance",
-	"breakdance1": "Breakdance",
-	"chickendance": "ChickenDance",
-	"macarena": "Macarena",
-	"tennadance": "TennaDance",
+	"macarena": "DanceMacarena",
+	"chicken": "DanceChicken",
+	"tenna": "DanceTenna",
+	"break": "DanceBreak"
 }
 
+const ANIM_LENGTH := {
+	"idle": 0.0,
+	"walk": 0.0,
+	"sit": 0.0,
+	"dance": 3.0,
+	"macarena": 4.0,
+	"chicken": 4.0,
+	"tenna": 4.0,
+	"break": 5.0
+}
+
+
+const HEAD_TRACK_ALLOWED_ANIMS := ["idle", "walk", "sit"]
+
 func _ready():
-	# Cache bone index (but don't use it for now)
-	if skeleton:
-		head_bone_idx = skeleton.find_bone(head_bone_name)
-		if head_bone_idx != -1:
-			print("[NPCActionController] Head bone found (tracking DISABLED due to bugs)")
+	animation_tree.active = true
 	
+	for key in AVAILABLE_ANIMATIONS.values():
+		blend_params[key] = "parameters/%s/blend_amount" % key
 	# Setup navigation
 	if navigation_agent:
 		navigation_agent.velocity_computed.connect(_on_velocity_computed)
 		navigation_agent.target_reached.connect(_on_navigation_complete)
-	
-	# Setup AnimationTree
-	if animation_tree:
-		animation_tree.active = true
-		using_animation_tree = true
-		
-		var state_machine = animation_tree.get("parameters/playback")
-		if state_machine:
-			state_machine.travel("Idle")
-			current_animation = "idle"
-		
-		print("[NPCActionController] Using AnimationTree (with blending)")
-	elif animation_player:
-		using_animation_tree = false
-		print("[NPCActionController] Using AnimationPlayer (no blending)")
 
 func _physics_process(delta):
 	# Movement
@@ -129,12 +124,8 @@ func play_animation(anim_name: String) -> bool:
 	return false
 
 func _play_animation_with_tree(anim_name: String) -> bool:
-	var state_machine = animation_tree.get("parameters/playback")
-	if not state_machine:
-		return false
-	
-	var actual_anim = available_animations.get(anim_name.to_lower(), "")
-	if actual_anim == "":
+	var key := anim_name.to_lower()
+	if not AVAILABLE_ANIMATIONS.has(key):
 		return false
 	
 	if is_animation_playing and current_animation != anim_name:
@@ -143,21 +134,26 @@ func _play_animation_with_tree(anim_name: String) -> bool:
 	current_animation = anim_name
 	is_animation_playing = true
 	
-	# Keep head tracking ONLY for idle, walk, and sit
-	var allowed_head_tracking = ["idle", "walk", "sit"]
-	if anim_name.to_lower() in allowed_head_tracking:
-		look_at_modifier_3d.active = true
-	else:
-		look_at_modifier_3d.active = false
-		
-	state_machine.travel(actual_anim)
-	action_started.emit(anim_name)
+	# Head tracking
+	look_at_modifier_3d.active = key in HEAD_TRACK_ALLOWED_ANIMS
 	
+	_set_active_blend(AVAILABLE_ANIMATIONS[key])
+	
+	action_started.emit(anim_name)
+	_wait_for_animation_finish(anim_name)
+	return true
 	_wait_for_animation_finish(anim_name)
 	return true
 
+func _set_active_blend(active: String, value := 1.0):
+	for name in blend_params.keys():
+		animation_tree.set(blend_params[name], 0.0)
+	
+	animation_tree.set(blend_params[active], value)
+
+
 func _play_animation_with_player(anim_name: String) -> bool:
-	var actual_anim = available_animations.get(anim_name.to_lower(), "")
+	var actual_anim = AVAILABLE_ANIMATIONS.get(anim_name.to_lower(), "")
 	if actual_anim == "" or not animation_player.has_animation(actual_anim):
 		return false
 	
@@ -171,40 +167,53 @@ func _play_animation_with_player(anim_name: String) -> bool:
 	_wait_for_animation_finish(anim_name)
 	return true
 
-func _wait_for_animation_finish(anim_name: String):
-	if using_animation_tree:
-		await get_tree().create_timer(2.0).timeout
-	else:
-		await animation_player.animation_finished
+func _wait_for_animation_finish(anim_name: String) -> void:
+	var key: String = anim_name.to_lower()
 	
-	if current_animation == anim_name:
-		action_completed.emit(anim_name)
-		is_animation_playing = false
+	# Looping / persistent animations never "finish"
+	if not ANIM_LENGTH.has(key):
+		return
+	
+	var duration: float = ANIM_LENGTH[key]
+	if duration <= 0.0:
+		return
+	
+	# Wait for the gameplay-defined duration
+	await get_tree().create_timer(duration).timeout
+	
+	# Make sure we didn't switch animations mid-wait
+	if current_animation != anim_name:
+		return
+	
+	is_animation_playing = false
+	action_completed.emit(anim_name)
+
 
 func stop_animation():
 	if is_animation_playing:
 		action_completed.emit(current_animation)
 		is_animation_playing = false
+	
 	play_animation("idle")
-	# Re-enable head tracking when returning to idle
 	look_at_modifier_3d.active = true
 
 func get_available_animations() -> Array:
-	return available_animations.keys()
+	return AVAILABLE_ANIMATIONS.keys()
 
 func _update_walk_animation_speed(current_speed: float):
 	if current_animation != "walk":
 		return
 	
-	var speed_scale = 1.0
-	if walk_speed > 0:
-		speed_scale = current_speed / walk_speed
-		speed_scale = clamp(speed_scale, min_speed_scale, max_speed_scale)
+	var speed_scale := 1.0
+	if walk_speed > 0.0:
+		speed_scale = clamp(
+			current_speed / walk_speed,
+			min_speed_scale,
+			max_speed_scale
+		)
 	
-	if using_animation_tree and animation_tree:
-		animation_tree.set("parameters/Walking/scale", speed_scale)
-	elif animation_player:
-		animation_player.speed_scale = speed_scale
+	animation_tree.set("parameters/Walking/scale", speed_scale)
+
 
 # ============ NAVIGATION ============
 
