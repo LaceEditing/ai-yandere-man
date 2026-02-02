@@ -11,6 +11,7 @@ class_name Room
 var entities_in_room: Array = []
 
 func _ready():
+	add_to_group("rooms")
 	# Connect signals
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)

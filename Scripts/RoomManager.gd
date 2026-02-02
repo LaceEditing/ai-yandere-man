@@ -116,6 +116,24 @@ func get_npc_location_description(npc_name: String) -> String:
 
 # ============ Debug Info ============
 
+func get_room_node(room_display_name: String) -> Node3D:
+	"""Find a room node by its display name (the room_name property)."""
+	# Get all Room nodes in the scene tree
+	var all_rooms = get_tree().get_nodes_in_group("rooms")
+	
+	for room in all_rooms:
+		if room is Room and room.get_room_name() == room_display_name:
+			return room
+	
+	# Not found - print debug info
+	print("[RoomManager] ⚠️ Could not find room: '", room_display_name, "'")
+	print("[RoomManager] Available rooms:")
+	for room in all_rooms:
+		if room is Room:
+			print("  - '", room.get_room_name(), "'")
+	
+	return null
+
 func get_all_locations() -> Dictionary:
 	return {
 		"player": player_current_room,

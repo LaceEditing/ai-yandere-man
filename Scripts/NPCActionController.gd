@@ -143,11 +143,12 @@ func _play_animation_with_tree(anim_name: String) -> bool:
 	current_animation = anim_name
 	is_animation_playing = true
 	
-	# Disable the LookAtModifier3D's "SkeletonModifier3D"'s "Active" parameter
-	if anim_name != "idle" or anim_name != "sitting" or anim_name != "walking":
-		look_at_modifier_3d.active = false
-	else:
+	# Keep head tracking ONLY for idle, walk, and sit
+	var allowed_head_tracking = ["idle", "walk", "sit"]
+	if anim_name.to_lower() in allowed_head_tracking:
 		look_at_modifier_3d.active = true
+	else:
+		look_at_modifier_3d.active = false
 		
 	state_machine.travel(actual_anim)
 	action_started.emit(anim_name)
@@ -185,7 +186,7 @@ func stop_animation():
 		action_completed.emit(current_animation)
 		is_animation_playing = false
 	play_animation("idle")
-	# Supposed to re-enable the "Active" parameter of SkeletonModifier3D but probably not working
+	# Re-enable head tracking when returning to idle
 	look_at_modifier_3d.active = true
 
 func get_available_animations() -> Array:
@@ -237,7 +238,15 @@ func move_to_position(target_pos: Vector3) -> void:
 func move_to_location(location_name: String) -> bool:
 	print("[NPCActionController] 🔍 Looking for location: '", location_name, "'")
 	
-	var target = get_tree().root.find_child(location_name, true, false)
+	var target = RoomManager.get_room_node(location_name)
+	
+	if not target:
+		push_error("[NPCActionController] ❌ Location NOT FOUND: '", location_name, "'")
+		return false
+	
+	print("[NPCActionController] ✅ Found '", location_name, "' at position: ", target.global_position)
+	move_to_position(target.global_position)
+	return true
 	
 	if not target:
 		push_error("[NPCActionController] ❌ Location NOT FOUND: '", location_name, "'")
@@ -269,6 +278,8 @@ func stop_moving() -> void:
 	
 	if current_animation == "walk":
 		play_animation("idle")
+		# Explicitly re-enable head tracking after walking
+		look_at_modifier_3d.active = true
 
 # ============ HEAD TRACKING (DISABLED) ============
 
