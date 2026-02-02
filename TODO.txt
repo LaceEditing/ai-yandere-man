@@ -1,15 +1,6 @@
-Replace the default greeting that is still in the code with one more like AI2U where a generated output greeting is created based on the NPC's info and then displayed/spoken when the game starts automatically as if the user had already inputted dialogue.
-
-Give the player the ability to name their character as well as the AI's character when the game starts.
-
-=================================================================================================================================
-
-Long-Term TODOS:
-
-Let the NPC walk around the space, dynamically choosing where to go based on what's being said, what it sees with its vision, among other variables like the mood they're in and whatnot.
 
 Actually create 3D objects in the room that can be interacted with by both the player and the NPC.
 
 Actually establish a win/lose condition set and create a basic prototype implementation.
 
-Improve AI output so it doesn't sound so much like a robot playing a role, and more like a real person.
+Improve AI voice and output so it doesn't sound so much like a robot playing a role, and more like a real person.

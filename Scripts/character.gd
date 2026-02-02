@@ -15,6 +15,8 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 # Cached autoload references
 var ai_settings_menu: CanvasLayer = null
+var player_health: Node = null
+var game_manager: Node = null
 
 func _ready():
 	# Capture mouse cursor
@@ -31,6 +33,14 @@ func _ready():
 	
 	# Cache the AISettingsMenu reference if it exists
 	ai_settings_menu = get_node_or_null("/root/AISettingsMenu")
+	
+	# Setup player health system
+	player_health = PlayerHealth.new()
+	add_child(player_health)
+	player_health.player_died.connect(_on_player_died)
+	
+	# Get GameManager reference
+	game_manager = get_node_or_null("/root/GameManager")
 
 func _is_menu_open() -> bool:
 	# Check if settings menu is open
@@ -111,6 +121,8 @@ func _physics_process(delta: float):
 	move_and_slide()
 	
 func attempt_dialogue():
+	print("[DEBUG] [Player] attempt_dialogue called - player pressed Enter!")
+	
 	# Don't start new dialogue if AI is busy responding
 	if DialogueUI and DialogueUI.has_method("is_busy") and DialogueUI.is_busy():
 		print("AI is still responding, please wait...")
@@ -123,11 +135,23 @@ func attempt_dialogue():
 	
 	# Get the NPC in the scene
 	var npc = NPCManager.get_current_npc()
+	print("[DEBUG] [Player] NPCManager.get_current_npc() returned: ", npc)
 	
 	if npc:
+		print("[DEBUG] [Player] Calling start_conversation() on NPC: ", npc.npc_name if "npc_name" in npc else "Unknown")
 		npc.start_conversation()
 	else:
 		print("No NPC found in scene")
+
+func _on_player_died():
+	print("[Player] Player died!")
+	# Disable player input
+	set_process_input(false)
+	set_physics_process(false)
+	
+	# Trigger game over
+	if game_manager:
+		game_manager.trigger_game_over("You were killed by the yandere!")
 
 func _unhandled_input(event):
 	# Press ESC to free mouse cursor (for menus)

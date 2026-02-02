@@ -6,18 +6,7 @@ extends CharacterBody3D
 
 # ============ ENUMS ============
 
-enum Mood {
-	NEUTRAL,
-	HAPPY,
-	ANGRY,
-	SAD,
-	FEARFUL,
-	DISGUSTED,
-	SURPRISED,
-	FLIRTY,
-	SARCASTIC,
-	TIRED,
-}
+# Emotions are now 0-100 intensity values (see Emotion System group)
 
 enum VoicePreset {
 	# American Female
@@ -51,13 +40,39 @@ enum VoicePreset {
 @export_multiline var npc_goals: String = "Make money, retire comfortably"
 @export_multiline var npc_knowledge: String = "Knows about adventuring gear, local gossip"
 @export_multiline var npc_appearance: String = "A tall figure wearing a brown apron"
+@export var player_name: String = "" ## The player's name (leave empty for generic "the player")
 @export_multiline var player_appearance: String = "The player is a green humanoid figure"
 
-# Mood System
-@export_group("Mood System")
-@export var default_mood: Mood = Mood.NEUTRAL
-@export var enable_dynamic_mood: bool = true ## AI can change mood based on conversation
-@export var mood_decay_time: float = 120.0 ## Seconds before mood returns to default
+# Emotion System (0-100 intensity for each emotion)
+@export_group("Emotion System")
+@export_range(0, 100, 1) var happy: int = 0 ## Cheerfulness, joy
+@export_range(0, 100, 1) var angry: int = 0 ## Irritation, rage
+@export_range(0, 100, 1) var sad: int = 0 ## Melancholy, sadness
+@export_range(0, 100, 1) var fearful: int = 0 ## Anxiety, fear
+@export_range(0, 100, 1) var disgusted: int = 0 ## Repulsion, distaste
+@export_range(0, 100, 1) var surprised: int = 0 ## Shock, amazement
+@export_range(0, 100, 1) var flirty: int = 0 ## Playfulness, attraction
+@export_range(0, 100, 1) var tired: int = 0 ## Exhaustion, fatigue
+@export_range(0, 100, 1) var trust: int = 50 ## Trust/comfort with player (affects patience)
+@export_range(0, 100, 1) var hostility: int = 0 ## Hostility level - attacks at 100 (low trust increases gain)
+@export var enable_dynamic_emotions: bool = true ## AI can change emotions based on conversation
+@export var enable_emotion_decay: bool = true ## Emotions gradually return to baseline (disable to keep emotions permanent)
+@export var emotion_decay_rate: float = 5.0 ## Points per second emotions decay toward baseline
+@export var emotion_decay_time: float = 120.0 ## Seconds before emotions return to baseline
+
+# Patience system
+@export_group("Patience System")
+@export var enable_patience: bool = true ## React to being ignored during conversation
+@export_range(5.0, 60.0, 1.0, "suffix:seconds") var base_patience_time: float = 15.0 ## Base time before reacting to silence
+@export_range(0.0, 2.0, 0.1) var trust_patience_multiplier: float = 1.5 ## How much trust extends patience (multiplier)
+
+# Hostility system
+@export_group("Hostility System")
+@export var enable_hostility: bool = true ## Can become hostile and attack player
+@export_range(5, 50, 5) var attack_damage: int = 25 ## Damage per attack
+@export_range(1.0, 5.0, 0.5, "suffix:seconds") var attack_cooldown: float = 2.0 ## Time between attacks
+@export_range(1.0, 10.0, 0.5, "suffix:meters") var attack_range: float = 3.0 ## Max distance to attack
+@export var require_same_room_for_attack: bool = true ## Must be in same room to attack
 
 # Conversation settings
 @export_group("Dialogue Settings")
@@ -99,14 +114,24 @@ enum VoicePreset {
 @export var enable_actions: bool = true ## Enable LLM-controlled actions (animations, movement, head tracking)
 @export var auto_look_at_player: bool = true ## Automatically look at player when talking
 
+# Autonomous Behavior settings
+@export_group("Autonomous Behavior")
+@export var enable_autonomous_behavior: bool = false ## Let NPC decide actions on its own
+@export_range(5.0, 120.0, 5.0, "suffix:seconds") var autonomous_decision_interval: float = 30.0 ## How often NPC makes autonomous decisions
+@export var autonomous_only_when_idle: bool = true ## Only make autonomous decisions when not in conversation
+@export_range(0.0, 1.0, 0.05) var spontaneous_action_chance: float = 0.2 ## Probability of spontaneous actions during conversation (0.2 = 20%)
+@export_multiline var npc_current_goal: String = "" ## Current objective - influences behavior and dialogue. Leave empty for no specific goal.
+
 # ============ INTERNAL STATE ============
 
 # References
 @onready var chat_node = $ChatNode
-@onready var vision_viewport: SubViewport = $AnimeBoy/Camera3D/SubViewport
-@onready var npc_camera: Camera3D = $AnimeBoy/Camera3D
 @onready var action_controller: NPCActionController = $ActionController
 @onready var action_parser: NPCActionParser = $ActionParser
+
+# Vision references (set dynamically in _setup_vision)
+var vision_viewport: SubViewport = null
+var npc_camera: Camera3D = null
 @export var look_at_modifier_3d: LookAtModifier3D
 @export var nav_agent: NavigationAgent3D
 @export var non_ai_vision: Area3D
@@ -119,7 +144,6 @@ var is_talking = false
 var current_response = ""
 var conversation_history: Array = []
 var forget_timer: Timer
-var mood_decay_timer: Timer
 var system_prompt: String = ""
 
 # Greeting generation state
@@ -127,8 +151,21 @@ var generated_greeting: String = ""
 var greeting_generated: bool = false
 var is_generating_greeting: bool = false
 
-# Current mood
-var current_mood: Mood = Mood.NEUTRAL
+# Current emotions (dynamic values that change)
+var current_emotions: Dictionary = {
+	"happy": 0,
+	"angry": 0,
+	"sad": 0,
+	"fearful": 0,
+	"disgusted": 0,
+	"surprised": 0,
+	"flirty": 0,
+	"tired": 0,
+	"trust": 50
+}
+
+# Baseline emotions (from Inspector, what emotions decay toward)
+var baseline_emotions: Dictionary = {}
 
 # Groq-specific state
 var groq_provider = null
@@ -150,42 +187,59 @@ var is_speaking: bool = false
 var pending_actions: Array = []
 var is_executing_action: bool = false
 
+# Autonomous behavior state
+var autonomous_timer: Timer = null
+var is_making_autonomous_decision: bool = false
+var is_autonomous_text: bool = false  # Track if current dialogue is from autonomous action
+var is_patience_response: bool = false  # Track if current dialogue is from patience timeout
+
+# Patience system state
+var patience_timer: Timer = null
+var is_waiting_for_response: bool = false
+
+# Hostility system state
+var is_hostile: bool = false
+var can_attack: bool = true
+var attack_timer: Timer = null
+var player_ref: Node3D = null
+var is_chasing: bool = false
+
 # ============ SIGNALS ============
 
 signal dialogue_updated(text: String)
 signal dialogue_finished(text: String)
 signal voice_started()
 signal voice_finished()
-signal mood_changed(old_mood: Mood, new_mood: Mood)
+signal emotions_changed(emotions: Dictionary)
 signal greeting_generation_complete(greeting_text: String)
 signal action_executed(action_name: String)
 
-# ============ MOOD DESCRIPTIONS ============
+# ============ EMOTION DESCRIPTORS ============
 
-const MOOD_DESCRIPTIONS: Dictionary = {
-	Mood.NEUTRAL: "calm and composed",
-	Mood.HAPPY: "cheerful and upbeat",
-	Mood.ANGRY: "irritated and aggressive",
-	Mood.SAD: "melancholic and downcast",
-	Mood.FEARFUL: "nervous and anxious",
-	Mood.DISGUSTED: "repulsed and dismissive",
-	Mood.SURPRISED: "shocked and bewildered",
-	Mood.FLIRTY: "playful and suggestive",
-	Mood.SARCASTIC: "dry and mocking",
-	Mood.TIRED: "exhausted and sluggish",
+const EMOTION_DESCRIPTORS: Dictionary = {
+	"happy": "cheerful and upbeat",
+	"angry": "irritated and aggressive",
+	"sad": "melancholic and downcast",
+	"fearful": "nervous and anxious",
+	"disgusted": "repulsed and dismissive",
+	"surprised": "shocked and bewildered",
+	"flirty": "playful and suggestive",
+	"tired": "exhausted and sluggish",
+	"trust": "trusting and comfortable",
+	"hostility": "hostile and dangerous"
 }
 
-const MOOD_SPEECH_STYLES: Dictionary = {
-	Mood.NEUTRAL: "Speak in a normal, conversational tone.",
-	Mood.HAPPY: "Speak with enthusiasm! Use upbeat language and occasional exclamations!",
-	Mood.ANGRY: "Speak curtly. Short sentences. Show irritation.",
-	Mood.SAD: "Speak slowly... with pauses... trailing off sometimes...",
-	Mood.FEARFUL: "Speak nervously - quick, stuttering, uncertain...",
-	Mood.DISGUSTED: "Speak with disdain. Ugh. Show your contempt.",
-	Mood.SURPRISED: "What?! Speak with shock! Express disbelief!",
-	Mood.FLIRTY: "Speak playfully~ with a teasing tone~",
-	Mood.SARCASTIC: "Oh, speak with *such* enthusiasm. Really. Wow.",
-	Mood.TIRED: "Speak... slowly... like everything... is an effort...",
+const EMOTION_SPEECH_STYLES: Dictionary = {
+	"happy": "Speak with enthusiasm! Use upbeat language!",
+	"angry": "Speak curtly. Short sentences. Show irritation.",
+	"sad": "Speak slowly... with pauses... trailing off sometimes...",
+	"fearful": "Speak nervously - quick, stuttering, uncertain...",
+	"disgusted": "Speak with disdain. Show your contempt.",
+	"surprised": "What?! Speak with shock! Express disbelief!",
+	"flirty": "Speak playfully~ with a teasing tone~",
+	"tired": "Speak... slowly... like everything... is an effort...",
+	"trust": "Speak warmly and openly, like to a friend.",
+	"hostility": "Speak with menace and threat. Use intimidating language."
 }
 
 # Voice ID mapping
@@ -206,7 +260,8 @@ const VOICE_PRESET_IDS: Dictionary = {
 # ============ LIFECYCLE ============
 
 func _ready():
-	current_mood = default_mood
+	# Initialize emotions from Inspector values
+	_initialize_emotions()
 	
 	_detect_initial_room()
 	
@@ -231,12 +286,14 @@ func _ready():
 		forget_timer.timeout.connect(reset_conversation)
 		add_child(forget_timer)
 	
-	# Mood decay timer
-	if enable_dynamic_mood and mood_decay_time > 0:
-		mood_decay_timer = Timer.new()
-		mood_decay_timer.one_shot = true
-		mood_decay_timer.timeout.connect(_on_mood_decay)
-		add_child(mood_decay_timer)
+	# Emotion decay timer (processes gradual decay)
+	if enable_dynamic_emotions:
+		var emotion_timer = Timer.new()
+		emotion_timer.name = "EmotionDecayTimer"
+		emotion_timer.wait_time = 1.0  # Update every second
+		emotion_timer.timeout.connect(_process_emotion_decay)
+		add_child(emotion_timer)
+		emotion_timer.start()
 	
 	# Continuous vision capture timer
 	if enable_vision and vision_capture_interval > 0:
@@ -250,7 +307,37 @@ func _ready():
 	
 	NPCManager.register_npc(self)
 	
-	print(npc_name, " ready! Mood: ", Mood.keys()[current_mood], ", Voice: ", VoicePreset.keys()[voice_preset], ", Actions: ", enable_actions)
+	print(npc_name, " ready! Emotions: ", _get_dominant_emotions(), ", Voice: ", VoicePreset.keys()[voice_preset], ", Actions: ", enable_actions)
+	
+	# Setup autonomous behavior
+	if enable_autonomous_behavior:
+		_setup_autonomous_behavior()
+	
+	# Setup patience timer
+	if enable_patience:
+		patience_timer = get_node_or_null("Patience_Timer")
+		if patience_timer:
+			patience_timer.one_shot = true
+			patience_timer.timeout.connect(_on_patience_timeout)
+			print("[DEBUG] [", npc_name, "] Patience timer found and connected! (base: ", base_patience_time, "s)")
+		else:
+			push_warning("[", npc_name, "] Patience enabled but no Patience_Timer node found!")
+	else:
+		print("[DEBUG] [", npc_name, "] Patience system disabled (enable_patience = false)")
+	
+	# Setup hostility system
+	if enable_hostility:
+		attack_timer = Timer.new()
+		attack_timer.name = "AttackTimer"
+		attack_timer.one_shot = true
+		add_child(attack_timer)
+		
+		# Try to find player
+		player_ref = get_tree().get_first_node_in_group("player")
+		if player_ref:
+			print("[", npc_name, "] Hostility system enabled (Attacks at 100 hostility)")
+		else:
+			push_warning("[", npc_name, "] Hostility enabled but player not found in 'player' group!")
 	
 	# Generate greeting AFTER everything is set up
 	if generate_greeting_on_start:
@@ -318,7 +405,7 @@ func _execute_next_action():
 	print("[", npc_name, "] ▶️  Executing: ", action)
 	
 	if action_controller:
-		var success = await action_controller.execute_action(action)
+		var success = action_controller.execute_action(action)
 		
 		if success:
 			action_executed.emit(action.get("action", "unknown"))
@@ -332,6 +419,414 @@ func _execute_next_action():
 func _on_action_completed(action_name: String):
 	"""Called when an action completes."""
 	print("[", npc_name, "] ✅ Action completed: ", action_name)
+
+# ============ AUTONOMOUS BEHAVIOR ============
+
+func _setup_autonomous_behavior():
+	"""Initialize autonomous behavior system."""
+	if not enable_autonomous_behavior:
+		return
+	
+	autonomous_timer = Timer.new()
+	autonomous_timer.name = "AutonomousTimer"
+	autonomous_timer.wait_time = autonomous_decision_interval
+	autonomous_timer.timeout.connect(_on_autonomous_timer_timeout)
+	add_child(autonomous_timer)
+	autonomous_timer.start()
+	
+	print("[", npc_name, "] Autonomous behavior enabled (every ", autonomous_decision_interval, "s)")
+	
+	if not npc_current_goal.is_empty():
+		print("[", npc_name, "] 🎯 Current goal: ", npc_current_goal)
+
+
+func _on_autonomous_timer_timeout():
+	"""Timer callback to make autonomous decisions."""
+	if not enable_autonomous_behavior:
+		return
+	
+	# Skip if already busy
+	if is_making_autonomous_decision:
+		return
+	
+	# Skip if currently speaking (don't interrupt audio)
+	if is_speaking:
+		print("[", npc_name, "] ⏸️  Skipping autonomous decision - currently speaking")
+		return
+	
+	# Skip if in conversation (if setting is enabled)
+	if autonomous_only_when_idle and is_talking:
+		return
+	
+	_make_autonomous_decision()
+
+
+func _make_autonomous_decision():
+	"""Ask the AI to decide what to do next."""
+	if is_making_autonomous_decision:
+		return
+	
+	is_making_autonomous_decision = true
+	print("[", npc_name, "] 🤔 Making autonomous decision...")
+	
+	var decision_prompt = _build_autonomous_decision_prompt()
+	
+	# Use the appropriate provider
+	if using_groq:
+		await _request_autonomous_decision_groq(decision_prompt)
+	else:
+		await _request_autonomous_decision_local(decision_prompt)
+	
+	is_making_autonomous_decision = false
+
+
+func _build_autonomous_decision_prompt() -> String:
+	"""Build prompt for autonomous decision-making with rich context."""
+	var prompt = ""
+	
+	# === IDENTITY & STATE ===
+	prompt += "# WHO YOU ARE:\n"
+	prompt += "Name: %s\n" % npc_name
+	prompt += "Personality: %s\n" % npc_personality
+	prompt += "Background: %s\n" % npc_background
+	prompt += "Life Goals: %s\n" % npc_goals
+	prompt += "Feeling: %s\n" % get_emotion_description()
+	
+	# === CURRENT GOAL (if set in inspector) ===
+	if not npc_current_goal.is_empty():
+		prompt += "\n# YOUR CURRENT GOAL:\n"
+		prompt += "🎯 %s\n" % npc_current_goal
+		prompt += "→ Consider actions that work toward this goal!\n"
+	
+	# === CURRENT SITUATION ===
+	prompt += "\n# YOUR CURRENT SITUATION:\n"
+	prompt += "You are in: %s\n" % current_room
+	
+	# Get available OTHER rooms (excluding current)
+	var other_rooms = RoomManager.get_other_rooms(current_room)
+	if other_rooms.size() > 0:
+		prompt += "Other locations you can go to: %s\n" % ", ".join(other_rooms)
+	else:
+		prompt += "There are no other rooms to walk to.\n"
+	
+	# Current physical state
+	if action_controller:
+		prompt += action_controller.get_state_description() + "\n"
+	
+	# === PLAYER INFO ===
+	prompt += "\n# THE PLAYER:\n"
+	if not player_appearance.is_empty():
+		prompt += "Appearance: %s\n" % player_appearance
+	
+	if RoomManager:
+		var player_room = RoomManager.get_player_room()
+		if player_room == current_room:
+			prompt += "Location: HERE (same room as you)\n"
+			prompt += "→ You could interact with them if you want.\n"
+		else:
+			prompt += "Location: %s (different room)\n" % player_room
+			prompt += "→ They can't hear you unless you go there.\n"
+	
+	# === DECISION FRAMEWORK ===
+	prompt += "\n# WHAT YOU CAN DO:\n"
+	prompt += "1. NOTHING (stay idle) → respond with empty text\n"
+	prompt += "2. GO SOMEWHERE → [walk_to:RoomName] (pick from available locations ONLY)\n"
+	prompt += "3. DO AN ANIMATION → [animate:sit], [animate:dance], [animate:idle]\n"
+	prompt += "4. SAY SOMETHING ALOUD → VERY RARE - only if someone is present AND you have urgent reason to speak\n"
+	
+	prompt += "\n# CRITICAL RULES:\n"
+	prompt += "• You are ALREADY in %s - do NOT walk_to:%s (that's where you are!)\n" % [current_room, current_room]
+	prompt += "• NEVER use [animate:walk] - walking animation plays AUTOMATICALLY when moving\n"
+	prompt += "• NEVER narrate ('I see...', 'I notice...', 'I think...')\n"
+	prompt += "• NEVER describe your reasoning - just DO or stay silent\n"
+	prompt += "• DO NOT SPEAK unless someone is in the same room AND you have urgent reason to talk\n"
+	prompt += "• Most people go about their day SILENTLY - speaking to yourself is weird\n"
+	prompt += "• STRONG PREFERENCE: Choose physical actions (movement/animation) over speech\n"
+	prompt += "• When in doubt, do NOTHING or perform a simple action\n"
+	
+	prompt += "\n# EXAMPLES:\n"
+	prompt += "Doing nothing: (empty response)\n"
+	prompt += "Movement: [walk_to:Kitchen]\n"
+	prompt += "Animation: [animate:sit]\n"
+	prompt += "Combined: [walk_to:Kitchen] [animate:sit]\n"
+	prompt += "Speaking (RARE): Hey! You there?\n"
+	
+	prompt += "\n# BAD (NEVER DO):\n"
+	prompt += "❌ 'I see the player.' (narration)\n"
+	prompt += "❌ 'I should go to the kitchen.' (meta-thought)\n"
+	prompt += "❌ 'I wonder what's happening.' (internal monologue)\n"
+	prompt += "❌ 'Hmm...' or 'Let me think...' (speaking to empty room)\n"
+	prompt += "❌ '[walk_to:%s]' (you're already here!)\n" % current_room
+	prompt += "❌ '[animate:walk]' (walk is automatic, never use it)\n"
+	
+	prompt += "\nYour response (PREFER: empty, action, or movement - AVOID: speech):"
+	
+	return prompt
+
+
+func _request_autonomous_decision_groq(prompt: String):
+	"""Request autonomous decision from Groq API."""
+	if not groq_provider:
+		return
+	
+	# Mark as autonomous so _process_response won't restart patience timer
+	is_autonomous_text = true
+	
+	# Build message history with system prompt and current request
+	var messages = []
+	if not system_prompt.is_empty():
+		messages.append({"role": "system", "content": system_prompt})
+	messages.append({"role": "user", "content": prompt})
+	
+	# Use ask() method with history
+	groq_provider.ask(prompt, messages)
+	
+	# Wait for response via signal
+	var response = await groq_provider.response_finished
+	
+	# Reset flag after response
+	is_autonomous_text = false
+	
+	if response != "":
+		_process_autonomous_decision(response)
+
+
+func _request_autonomous_decision_local(prompt: String):
+	"""Request autonomous decision from local model."""
+	if not chat_node:
+		return
+	
+	# Mark as autonomous so _process_response won't restart patience timer
+	is_autonomous_text = true
+	
+	# Create a simple one-shot prompt
+	var full_prompt = system_prompt + "\n\nUser: " + prompt + "\nAssistant:"
+	
+	# Send to local model
+	var response = await chat_node.send_prompt(full_prompt)
+	
+	# Reset flag after response
+	is_autonomous_text = false
+	
+	if response != "":
+		_process_autonomous_decision(response)
+
+
+func _process_autonomous_decision(response: String):
+	"""Process the AI's autonomous decision."""
+	print("[", npc_name, "] Autonomous decision: ", response)
+	
+	# Parse for any actions
+	var clean_text = response
+	if action_parser and enable_actions:
+		var parsed = action_parser.parse_response(response)
+		clean_text = parsed.text  # Get text without action tags
+		
+		if parsed.actions.size() > 0:
+			print("[", npc_name, "] 🎬 Detected ", parsed.actions.size(), " autonomous action(s)")
+			
+			# Validate and filter actions
+			var valid_actions = []
+			for action in parsed.actions:
+				if _validate_autonomous_action(action):
+					valid_actions.append(action)
+				else:
+					print("[", npc_name, "] ⚠️ Filtered invalid action: ", action)
+			
+			# Queue the valid actions
+			for action in valid_actions:
+				pending_actions.append(action)
+			
+			# Start executing if not already
+			if not is_executing_action and valid_actions.size() > 0:
+				_execute_next_action()
+	
+	# Display the text (without action tags) in DialogueUI
+	if clean_text.strip_edges() != "":
+		_display_autonomous_text(clean_text)
+
+
+func _validate_autonomous_action(action: Dictionary) -> bool:
+	"""Validate an autonomous action to prevent nonsensical behavior."""
+	var action_type = action.get("action", "")
+	
+	# Block standalone walk animation (walk animation should only play when actually moving)
+	if action_type == "play_animation":
+		var anim = action.get("animation", "").to_lower().strip_edges()
+		# Block any variation of walk animation
+		if "walk" in anim:
+			print("[", npc_name, "] 🚫 Blocked standalone walk animation: '", anim, "' (should only play when moving)")
+			return false
+	
+	# Check walk_to actions
+	if action_type == "walk_to":
+		var target = action.get("target", "")
+		
+		# Don't walk to current room
+		if target.to_lower() == current_room.to_lower():
+			print("[", npc_name, "] 🚫 Blocked walk_to current room: ", target)
+			return false
+		
+		# Check if target is a valid room
+		var available_rooms = RoomManager.get_available_room_names()
+		var target_valid = false
+		for room in available_rooms:
+			if room.to_lower() == target.to_lower():
+				target_valid = true
+				break
+		
+		if not target_valid and target.to_lower() != "player":
+			print("[", npc_name, "] 🚫 Unknown room target: ", target, " (available: ", available_rooms, ")")
+			return false
+	
+	return true
+
+
+func _display_autonomous_text(text: String):
+	"""Display autonomous decision text in DialogueUI without affecting patience timer."""
+	current_response = text
+	
+	# Mark this as autonomous text so patience timer won't restart
+	is_autonomous_text = true
+	
+	# Show DialogueUI WITHOUT opening input (just show NPC text)
+	DialogueUI.show_dialogue(self, false)  # false = don't show input
+	
+	# Emit as dialogue_updated to trigger typewriter effect
+	dialogue_updated.emit(text)
+	
+	# Then emit finished to mark completion
+	dialogue_finished.emit(text)
+	
+	# Reset flag
+	is_autonomous_text = false
+	
+	# Speak the text if voice is enabled
+	if enable_voice:
+		_speak(text)
+	
+	print("[", npc_name, "] 🗨️  Auto-displayed: \"", text, "\" (patience unaffected)")
+
+
+# ============ GOAL SYSTEM ============
+
+func get_current_goal() -> String:
+	"""Get the current goal (for debug display)."""
+	return npc_current_goal
+
+
+func set_current_goal(new_goal: String):
+	"""Change the NPC's current goal at runtime."""
+	npc_current_goal = new_goal
+	print("[", npc_name, "] 🎯 Goal changed to: ", npc_current_goal)
+
+
+func clear_goal():
+	"""Clear the current goal."""
+	npc_current_goal = ""
+	print("[", npc_name, "] 🎯 Goal cleared")
+
+
+# ============ PATIENCE SYSTEM ============
+
+func _start_patience_timer():
+	"""Start or restart the patience timer with emotion-adjusted duration."""
+	if not patience_timer or not enable_patience:
+		print("[DEBUG] [", npc_name, "] _start_patience_timer failed - patience_timer=", patience_timer != null, ", enable_patience=", enable_patience)
+		return
+	
+	# Calculate patience duration based on trust and emotions
+	var patience_duration = _calculate_patience_duration()
+	
+	patience_timer.wait_time = patience_duration
+	patience_timer.start()
+	
+	print("[DEBUG] [", npc_name, "] ⏱️  Patience timer STARTED with ", patience_duration, "s (is_talking=", is_talking, ", is_waiting=", is_waiting_for_response, ")")
+
+
+func _calculate_patience_duration() -> float:
+	"""Calculate how long NPC waits before reacting to silence."""
+	var duration = base_patience_time
+	
+	# Trust increases patience (0-100 trust → 0.5x to trust_patience_multiplier)
+	var trust_factor = lerp(0.5, trust_patience_multiplier, current_emotions.get("trust", 50) / 100.0)
+	duration *= trust_factor
+	
+	# Angry/impatient reduces patience
+	var anger = current_emotions.get("angry", 0)
+	if anger > 30:
+		duration *= lerp(1.0, 0.5, (anger - 30) / 70.0)  # 30-100 angry → 1.0x to 0.5x
+	
+	# Happy/content increases patience slightly
+	var happiness = current_emotions.get("happy", 0)
+	if happiness > 50:
+		duration *= lerp(1.0, 1.2, (happiness - 50) / 50.0)  # 50-100 happy → 1.0x to 1.2x
+	
+	# Tired reduces patience
+	var tiredness = current_emotions.get("tired", 0)
+	if tiredness > 40:
+		duration *= lerp(1.0, 0.7, (tiredness - 40) / 60.0)  # 40-100 tired → 1.0x to 0.7x
+	
+	return clamp(duration, 3.0, 120.0)  # Min 3s, max 2 minutes
+
+
+func _on_patience_timeout():
+	"""Called when player hasn't responded - NPC reacts to being ignored."""
+	print("[DEBUG] [", npc_name, "] ⏰ _on_patience_timeout FIRED! is_waiting=", is_waiting_for_response, ", is_talking=", is_talking)
+	
+	# Only check if we're waiting for response - is_talking is false after dialogue closes, which is fine!
+	if not is_waiting_for_response:
+		print("[DEBUG] [", npc_name, "] Patience timeout BLOCKED - not waiting for response")
+		return
+	
+	print("[DEBUG] [", npc_name, "] ⏰ Patience expired - generating ignore response")
+	
+	# Being ignored damages trust and happiness
+	adjust_emotion("trust", -5)
+	adjust_emotion("happy", -5)
+	print("[", npc_name, "] 💔 Feeling ignored - trust and happiness decreased")
+	
+	# Make sure DialogueUI will display this response
+	# Force-connect if not already connected (happens after close_dialogue)
+	if DialogueUI:
+		# Ensure DialogueUI is tracking this NPC
+		if not DialogueUI.current_npc:
+			# Re-establish connection temporarily for this response
+			DialogueUI.current_npc = self
+			if not dialogue_finished.is_connected(DialogueUI._on_dialogue_finished):
+				dialogue_finished.connect(DialogueUI._on_dialogue_finished)
+			if not dialogue_updated.is_connected(DialogueUI._on_dialogue_updated):
+				dialogue_updated.connect(DialogueUI._on_dialogue_updated)
+			# Connect voice signals for proper sync
+			if not voice_started.is_connected(DialogueUI._on_npc_voice_started):
+				voice_started.connect(DialogueUI._on_npc_voice_started)
+			if not voice_finished.is_connected(DialogueUI._on_npc_voice_finished):
+				voice_finished.connect(DialogueUI._on_npc_voice_finished)
+	
+	# Build a prompt that makes the AI react to silence
+	var player_ref = player_name if not player_name.is_empty() else "the player"
+	var silence_prompt = "%s hasn't said anything to you in a while. Are they ignoring you? React naturally based on your personality and emotions." % player_ref
+	
+	# Add to memory as a system observation
+	if enable_memory:
+		conversation_history.append({"role": "system", "content": "[%s is silent and hasn't responded]" % player_ref})
+	
+	# Treat this like a message being sent (so dialogue system handles it properly)
+	current_response = ""
+	system_prompt = build_system_prompt()
+	
+	# Mark this as a patience-triggered response so timer won't restart automatically
+	is_patience_response = true
+	
+	# Send the prompt as if player had sent a message
+	if using_groq:
+		_send_to_groq(silence_prompt)
+	else:
+		_send_to_local(silence_prompt)
+	
+	# Note: Don't restart timer here - let it restart when AI finishes responding
+	# This prevents spamming if AI is slow to respond
+
 
 # ============ GREETING GENERATION ============
 
@@ -407,8 +902,8 @@ func _on_greeting_generated(greeting_text: String):
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
 	
-	# Remove mood tags if present
-	cleaned = _strip_mood_tags(cleaned)
+	# Remove emotion tags if present
+	cleaned = _strip_emotion_tags(cleaned)
 	
 	# Parse and remove action tags (greeting shouldn't have actions, but just in case)
 	if enable_actions and action_parser:
@@ -465,99 +960,163 @@ func _auto_display_greeting():
 	if enable_voice and speak_greeting:
 		_speak(generated_greeting)
 	
-	# Auto look at player if enabled
-	if enable_actions and auto_look_at_player and action_controller:
-		var player = get_tree().get_first_node_in_group("player")
-		if player:
-			action_controller.look_at_node(player)
-	
 	print("[", npc_name, "] Auto-displayed greeting: ", generated_greeting)
 
 
-# ============ MOOD SYSTEM ============
+# ============ EMOTION SYSTEM ============
 
-func set_mood(new_mood: Mood):
-	if new_mood == current_mood:
+func _initialize_emotions():
+	"""Copy Inspector emotion values to current and baseline"""
+	baseline_emotions = {
+		"happy": happy,
+		"angry": angry,
+		"sad": sad,
+		"fearful": fearful,
+		"disgusted": disgusted,
+		"surprised": surprised,
+		"flirty": flirty,
+		"tired": tired,
+		"trust": trust,
+		"hostility": hostility
+	}
+	current_emotions = baseline_emotions.duplicate()
+	print("[", npc_name, "] Emotions initialized: ", _get_dominant_emotions())
+
+
+func set_emotion(emotion_name: String, intensity: int):
+	"""Set a specific emotion intensity (0-100)"""
+	if not current_emotions.has(emotion_name):
+		push_warning("Unknown emotion: ", emotion_name)
 		return
 	
-	var old_mood = current_mood
-	current_mood = new_mood
+	intensity = clamp(intensity, 0, 100)
+	var old_value = current_emotions[emotion_name]
+	current_emotions[emotion_name] = intensity
 	
-	print("[", npc_name, "] Mood: ", Mood.keys()[old_mood], " -> ", Mood.keys()[new_mood])
-	mood_changed.emit(old_mood, new_mood)
-	
-	# Restart mood decay timer
-	if mood_decay_timer and new_mood != default_mood:
-		mood_decay_timer.start(mood_decay_time)
+	if old_value != intensity:
+		print("[", npc_name, "] ", emotion_name.capitalize(), ": ", old_value, " -> ", intensity)
+		emotions_changed.emit(current_emotions.duplicate())
 
 
-func get_mood() -> Mood:
-	return current_mood
-
-
-func get_mood_name() -> String:
-	return Mood.keys()[current_mood]
-
-
-func get_mood_description() -> String:
-	return MOOD_DESCRIPTIONS.get(current_mood, "neutral")
-
-
-func _on_mood_decay():
-	if current_mood != default_mood:
-		set_mood(default_mood)
-
-
-## Parse AI response for mood indicators and update mood
-func _detect_mood_from_response(response: String):
-	if not enable_dynamic_mood:
+func adjust_emotion(emotion_name: String, delta: int):
+	"""Adjust emotion by delta amount"""
+	if not current_emotions.has(emotion_name):
 		return
 	
-	var lower_response = response.to_lower()
+	var new_value = clamp(current_emotions[emotion_name] + delta, 0, 100)
+	set_emotion(emotion_name, new_value)
+
+
+func _process_emotion_decay(delta: float = 1.0):
+	"""Gradually decay emotions toward baseline"""
+	if not enable_emotion_decay:
+		return  # Decay disabled, emotions stay permanent
 	
-	# Simple keyword detection - AI could also explicitly set mood
-	if "[mood:angry]" in lower_response or "[angry]" in lower_response:
-		set_mood(Mood.ANGRY)
-	elif "[mood:happy]" in lower_response or "[happy]" in lower_response:
-		set_mood(Mood.HAPPY)
-	elif "[mood:sad]" in lower_response or "[sad]" in lower_response:
-		set_mood(Mood.SAD)
-	elif "[mood:fear]" in lower_response or "[scared]" in lower_response:
-		set_mood(Mood.FEARFUL)
-	elif "[mood:surprise]" in lower_response or "[surprised]" in lower_response:
-		set_mood(Mood.SURPRISED)
-	elif "[mood:disgust]" in lower_response or "[disgusted]" in lower_response:
-		set_mood(Mood.DISGUSTED)
-	elif "[mood:flirty]" in lower_response or "[flirt]" in lower_response:
-		set_mood(Mood.FLIRTY)
-	elif "[mood:sarcastic]" in lower_response or "[sarcasm]" in lower_response:
-		set_mood(Mood.SARCASTIC)
-	elif "[mood:tired]" in lower_response or "[exhausted]" in lower_response:
-		set_mood(Mood.TIRED)
-	elif "[mood:neutral]" in lower_response or "[calm]" in lower_response:
-		set_mood(Mood.NEUTRAL)
-	else:
-		# Infer from punctuation/keywords
-		var exclamation_count = response.count("!")
-		var question_count = response.count("?")
-		var ellipsis_count = response.count("...")
+	var changed = false
+	
+	for emotion in current_emotions.keys():
+		var current = current_emotions[emotion]
+		var baseline = baseline_emotions[emotion]
 		
-		if exclamation_count >= 3 and ("hate" in lower_response or "damn" in lower_response or "hell" in lower_response):
-			set_mood(Mood.ANGRY)
-		elif exclamation_count >= 2 and ("great" in lower_response or "wonderful" in lower_response or "love" in lower_response):
-			set_mood(Mood.HAPPY)
-		elif ellipsis_count >= 2 and ("sorry" in lower_response or "miss" in lower_response or "wish" in lower_response):
-			set_mood(Mood.SAD)
+		if current != baseline:
+			var decay_amount = emotion_decay_rate * delta
+			
+			if current > baseline:
+				current_emotions[emotion] = max(current - decay_amount, baseline)
+				changed = true
+			elif current < baseline:
+				current_emotions[emotion] = min(current + decay_amount, baseline)
+				changed = true
+	
+	if changed:
+		emotions_changed.emit(current_emotions.duplicate())
 
 
-## Remove mood tags from response before displaying
-func _strip_mood_tags(text: String) -> String:
+func _get_dominant_emotions(threshold: int = 20) -> Array:
+	"""Get list of emotions above threshold"""
+	var dominant = []
+	for emotion in current_emotions.keys():
+		if current_emotions[emotion] >= threshold:
+			dominant.append({
+				"name": emotion,
+				"intensity": current_emotions[emotion]
+			})
+	
+	# Sort by intensity
+	dominant.sort_custom(func(a, b): return a.intensity > b.intensity)
+	return dominant
+
+
+func get_emotion_description() -> String:
+	"""Build natural language description of current emotions"""
+	var dominant = _get_dominant_emotions(20)
+	
+	if dominant.is_empty():
+		return "calm and neutral"
+	
+	var parts = []
+	for em in dominant:
+		var intensity_word = ""
+		if em.intensity >= 80:
+			intensity_word = "very "
+		elif em.intensity >= 50:
+			intensity_word = "quite "
+		elif em.intensity >= 20:
+			intensity_word = "slightly "
+		
+		parts.append(intensity_word + EMOTION_DESCRIPTORS[em.name])
+	
+	if parts.size() == 1:
+		return parts[0]
+	elif parts.size() == 2:
+		return parts[0] + " and " + parts[1]
+	else:
+		return ", ".join(parts.slice(0, -1)) + ", and " + parts[-1]
+
+
+func _detect_emotions_from_response(response: String):
+	"""Parse AI response for emotion tags and update emotions"""
+	if not enable_dynamic_emotions:
+		print("[", npc_name, "] 💭 Dynamic emotions disabled, skipping detection")
+		return
+	
+	# Parse emotion tags: [emotion:happy:75] or [happy:50] (case-insensitive)
+	var emotion_regex = RegEx.new()
+	emotion_regex.compile("(?i)\\[(?:emotion:)?(\\w+):(\\d+)\\]")
+	
+	var matches = emotion_regex.search_all(response)
+	
+	if matches.is_empty():
+		print("[", npc_name, "] 💭 No emotion tags found in response")
+	else:
+		print("[", npc_name, "] 💭 Found ", matches.size(), " emotion tag(s) in response")
+	
+	for match in matches:
+		var emotion_name = match.get_string(1).to_lower()
+		var raw_intensity = match.get_string(2).to_int()
+		
+		# Dampen emotion changes to prevent wild swings (reduce by 40%)
+		var intensity = int(raw_intensity * 0.6)
+		
+		if current_emotions.has(emotion_name):
+			print("[", npc_name, "] 💭 Setting emotion: ", emotion_name, " = ", intensity, " (AI wanted ", raw_intensity, ", dampened to ", intensity, ")")
+			set_emotion(emotion_name, intensity)
+		else:
+			print("[", npc_name, "] ⚠️ Unknown emotion: ", emotion_name, " (valid: ", current_emotions.keys(), ")")
+
+
+func _strip_emotion_tags(text: String) -> String:
+	"""Remove emotion tags from response (case-insensitive)"""
 	var result = text
-	# Remove [mood:X] and [X] style tags
-	var mood_regex = RegEx.new()
-	mood_regex.compile("\\[mood:\\w+\\]|\\[(?:angry|happy|sad|scared|surprised|disgusted|flirty|sarcasm|tired|neutral|calm)\\]")
-	result = mood_regex.sub(result, "", true)
+	var emotion_regex = RegEx.new()
+	emotion_regex.compile("(?i)\\[(?:emotion:)?(\\w+):(\\d+)\\]")
+	result = emotion_regex.sub(result, "", true)
 	return result.strip_edges()
+
+
+# Legacy mood functions for backwards compatibility
+func get_mood_description() -> String:
+	return get_emotion_description()
 
 # ============ VOICE SETUP ============
 
@@ -597,36 +1156,59 @@ func _get_mood_adjusted_speed() -> float:
 	if not mood_affects_voice:
 		return voice_speed
 	
-	# Adjust speed based on mood
-	match current_mood:
-		Mood.HAPPY:
-			return voice_speed * 0.9  # Slightly faster
-		Mood.ANGRY:
-			return voice_speed * 0.85  # Faster, more urgent
-		Mood.SAD:
-			return voice_speed * 1.2  # Slower
-		Mood.FEARFUL:
-			return voice_speed * 0.8  # Fast, nervous
-		Mood.TIRED:
-			return voice_speed * 1.3  # Very slow
-		Mood.SURPRISED:
-			return voice_speed * 0.85  # Quick reaction
-		Mood.SARCASTIC:
-			return voice_speed * 1.1  # Drawn out
-		_:
-			return voice_speed
+	# Adjust speed based on dominant emotions
+	# Higher intensity = stronger effect
+	var speed_modifier = 1.0
+	
+	# Speed-increasing emotions
+	if current_emotions["happy"] >= 30:
+		speed_modifier -= 0.05 * (current_emotions["happy"] / 100.0)  # Up to 5% faster
+	if current_emotions["angry"] >= 30:
+		speed_modifier -= 0.1 * (current_emotions["angry"] / 100.0)  # Up to 10% faster
+	if current_emotions["fearful"] >= 30:
+		speed_modifier -= 0.15 * (current_emotions["fearful"] / 100.0)  # Up to 15% faster, nervous
+	if current_emotions["surprised"] >= 30:
+		speed_modifier -= 0.1 * (current_emotions["surprised"] / 100.0)  # Up to 10% faster
+	
+	# Speed-decreasing emotions
+	if current_emotions["sad"] >= 30:
+		speed_modifier += 0.15 * (current_emotions["sad"] / 100.0)  # Up to 15% slower
+	if current_emotions["tired"] >= 30:
+		speed_modifier += 0.2 * (current_emotions["tired"] / 100.0)  # Up to 20% slower
+	
+	# Clamp final modifier to reasonable range (0.7x to 1.3x base speed)
+	speed_modifier = clamp(speed_modifier, 0.7, 1.3)
+	
+	return voice_speed * speed_modifier
 
 
-## Add Kokoro-compatible markers based on mood (ENHANCED with ProsodyAnalyzer)
+## Add Kokoro-compatible markers based on emotions (ENHANCED with ProsodyAnalyzer)
 func _add_mood_markers(text: String) -> String:
 	if not mood_affects_voice:
 		return text
 	
+	# Get dominant emotion for prosody
+	var dominant = _get_dominant_emotions(30)
+	var dominant_mood = -1  # -1 = neutral
+	
+	# Map dominant emotion to prosody mode (for backwards compat with ProsodyAnalyzer)
+	if dominant.size() > 0:
+		var top_emotion = dominant[0]["name"]
+		match top_emotion:
+			"happy": dominant_mood = 1
+			"angry": dominant_mood = 2
+			"sad": dominant_mood = 3
+			"fearful": dominant_mood = 4
+			"disgusted": dominant_mood = 5
+			"surprised": dominant_mood = 6
+			"flirty": dominant_mood = 7
+			"tired": dominant_mood = 8
+	
 	# Use ProsodyAnalyzer for intelligent enhancement
 	var enhanced = ProsodyAnalyzer.enhance_text(
 		text,
-		current_mood,
-		{"personality": npc_personality}  # Optional personality traits
+		dominant_mood,
+		{"personality": npc_personality, "emotions": current_emotions}  # Pass full emotion data
 	)
 	
 	return enhanced
@@ -656,32 +1238,61 @@ func _detect_initial_room():
 
 
 func _setup_vision():
-	vision_viewport = get_node_or_null("AnimeBoy/Camera3D/SubViewport")
+	# Try new path first (camera attached to head bone), then fall back to old path
+	npc_camera = get_node_or_null("AnimeBoy/Armature/Skeleton3D/HeadCameraAttachment/Camera3D")
+	if not npc_camera:
+		npc_camera = get_node_or_null("AnimeBoy/Camera3D")
+	
+	if not npc_camera:
+		push_warning(npc_name, " vision enabled but no camera found")
+		enable_vision = false
+		return
+	
+	# Get or create SubViewport under the camera
+	vision_viewport = npc_camera.get_node_or_null("SubViewport")
 	
 	if not vision_viewport:
 		vision_viewport = SubViewport.new()
-		vision_viewport.name = "VisionViewport"
-		vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
-		vision_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-		add_child(vision_viewport)
-	else:
-		vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
+		vision_viewport.name = "SubViewport"
+		npc_camera.add_child(vision_viewport)
 	
-	npc_camera = get_node_or_null("AnimeBoy/Camera3D")
+	# Configure viewport
+	vision_viewport.size = Vector2i(vision_resolution, vision_resolution)
+	vision_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	
-	if npc_camera:
-		var viewport_camera = Camera3D.new()
-		viewport_camera.fov = npc_camera.fov
-		viewport_camera.transform = npc_camera.transform
+	# Ensure viewport has a camera inside to render the scene
+	var viewport_camera = vision_viewport.get_node_or_null("ViewportCamera")
+	if not viewport_camera:
+		# Check if there's any camera child
+		for child in vision_viewport.get_children():
+			if child is Camera3D:
+				viewport_camera = child
+				break
+	
+	if not viewport_camera:
+		viewport_camera = Camera3D.new()
+		viewport_camera.name = "ViewportCamera"
 		vision_viewport.add_child(viewport_camera)
-	else:
-		push_warning(npc_name, " vision enabled but no camera found")
-		enable_vision = false
+	
+	viewport_camera.fov = npc_camera.fov
+	print("[", npc_name, "] 📷 Vision system ready - camera at: ", npc_camera.get_path())
 
 
 func _process(_delta):
+	# Check hostility
+	if enable_hostility:
+		_check_hostility()
+		
+		# Continuously chase player when hostile
+		if is_hostile and is_chasing and player_ref:
+			_update_chase_target()
+	
 	if enable_vision and vision_viewport and npc_camera:
-		var viewport_camera = vision_viewport.get_child(0) as Camera3D
+		var viewport_camera: Camera3D = null
+		for child in vision_viewport.get_children():
+			if child is Camera3D:
+				viewport_camera = child
+				break
 		if viewport_camera:
 			viewport_camera.global_transform = npc_camera.global_transform
 
@@ -770,16 +1381,28 @@ func build_system_prompt() -> String:
 7. BANNED: *smiles*, (laughs), [grins], *nods* or ANY similar formatting
 8. Express emotion through WORDS: Say "Hah!" not (laughs)
 
-# MOOD SYSTEM:
-Your current mood is: {mood_name} ({mood_desc})
-{mood_style}
+# EMOTION SYSTEM (USE THIS!):
+Your current emotions: {emotion_desc}
+{emotion_style}
 
-You CAN change your mood during conversation by including a mood tag like [mood:angry] or [mood:happy] at the END of your response (it will be hidden from the player).
-Available moods: angry, happy, sad, scared, surprised, disgusted, flirty, sarcasm, tired, neutral
+IMPORTANT: Express emotions using tags! Format: [emotion_name:intensity] where intensity is 0-100
+Available emotions: happy, angry, sad, fearful, disgusted, surprised, flirty, tired, trust
 
-Example with mood change:
+USE EMOTION TAGS in your responses! Examples:
+- Happy response: "That's wonderful! [happy:80]"
+- Angry response: "You're getting on my nerves! [angry:75]"
+- Mixed emotions: "Oh... I see. [sad:50] [surprised:40]"
+- Flirty: "Well aren't you charming? [flirty:60] [happy:30]"
+- Tired: "*yawn* ...what? [tired:70]"
+- Trust: "I'm glad we're talking. [trust:65] [happy:40]"
+
+Examples:
 Player: "Your shop is garbage!"
-You: "Excuse me?! Get out of my shop! [mood:angry]"
+You: "Excuse me?! Get out! [angry:85] [disgusted:60] [trust:-20]"
+
+Player: "You're amazing!"
+You: "Aw, thank you! [happy:80] [flirty:40] [trust:70]"
+{spontaneous_hint}
 """
 
 	# Add action system instructions if enabled
@@ -787,6 +1410,13 @@ You: "Excuse me?! Get out of my shop! [mood:angry]"
 		prompt += """
 # PHYSICAL ACTIONS:
 {action_instructions}
+
+IMPORTANT: You can spontaneously decide to do things! If you're in the middle of a conversation and suddenly
+remember something, want to go somewhere, or feel like doing something - just do it! Be natural and unpredictable.
+Examples:
+- "Oh! I just remembered I left something in the kitchen. [walk_to:Kitchen]"
+- "You know what, I'm feeling good! [animate:dance] What were you saying?"
+- "Hang on... [animate:sit] My feet are killing me. Continue."
 """
 
 	if enable_vision:
@@ -808,8 +1438,11 @@ Remember what has been said. Stay consistent. Track who says what.
 Name: {name}
 Personality: {personality}
 Background: {background}
-Goals: {goals}
+Life Goals: {goals}
 Knowledge: {knowledge}
+{current_goal_section}
+# THE PLAYER:
+{player_description}
 
 # WORLD CONTEXT:
 {world_lore}
@@ -818,24 +1451,40 @@ Location: {location_lore}
 # SPATIAL CONTEXT:
 {spatial_context}
 
-Speak naturally as {name} would. Your mood affects HOW you say things."""
+Speak naturally as {name} would. Your emotions affect HOW you say things."""
 
+	var dominant_emotions = _get_dominant_emotions(20)
+	var emotion_style_parts = []
+	for em in dominant_emotions:
+		if EMOTION_SPEECH_STYLES.has(em.name):
+			emotion_style_parts.append(EMOTION_SPEECH_STYLES[em.name])
+	
+	# Build current goal section if goal is set
+	var goal_section = ""
+	if not npc_current_goal.is_empty():
+		goal_section = """
+Current Objective: {current_goal}
+→ This is what you're focused on right now. It may subtly influence your responses and priorities.
+""".format({"current_goal": npc_current_goal})
+	
 	var format_map = {
 		"name": npc_name,
 		"max_length": max_response_length,
-		"mood_name": Mood.keys()[current_mood],
-		"mood_desc": get_mood_description(),
-		"mood_style": MOOD_SPEECH_STYLES.get(current_mood, ""),
+		"emotion_desc": get_emotion_description(),
+		"emotion_style": " ".join(emotion_style_parts) if emotion_style_parts.size() > 0 else "Speak in a natural, conversational tone.",
 		"personality": npc_personality,
 		"background": npc_background,
 		"goals": npc_goals,
 		"knowledge": npc_knowledge,
 		"npc_appearance": npc_appearance,
 		"player_appearance": player_appearance,
+		"player_description": _get_player_description(),
 		"world_lore": WorldLore.WORLD_LORE,
 		"location_lore": WorldLore.get_location_lore(npc_location),
 		"spatial_context": _build_spatial_context(),
-		"action_instructions": ""  # Will be filled if actions enabled
+		"action_instructions": "",  # Will be filled if actions enabled
+		"spontaneous_hint": _get_spontaneous_hint(),
+		"current_goal_section": goal_section
 	}
 	
 	# Add action instructions if enabled
@@ -848,6 +1497,9 @@ Speak naturally as {name} would. Your mood affects HOW you say things."""
 func _build_spatial_context() -> String:
 	var context = ""
 	
+	# Determine how to refer to the player
+	var player_ref = player_name if not player_name.is_empty() else "The player"
+	
 	var npc_room = RoomManager.get_npc_room(npc_name)
 	if npc_room != "unknown":
 		context += "You are in: " + npc_room + "\n"
@@ -855,33 +1507,80 @@ func _build_spatial_context() -> String:
 	var player_room = RoomManager.get_player_room()
 	if player_room != "unknown":
 		if player_room == npc_room:
-			context += "The player is here with you.\n"
+			context += player_ref + " is here with you.\n"
 		else:
-			context += "The player is in: " + player_room + "\n"
+			context += player_ref + " is in: " + player_room + "\n"
 	
 	if RoomManager.player_just_changed_rooms():
 		var prev_room = RoomManager.get_player_previous_room()
-		context += "The player just moved from " + prev_room + ".\n"
+		context += player_ref + " just moved from " + prev_room + ".\n"
 	
 	if context.is_empty():
 		context = "Location unknown.\n"
 	
 	return context
 
+func _get_player_description() -> String:
+	"""Build a clear description of who the player is."""
+	var desc = ""
+	
+	# Determine how to refer to the player
+	var player_ref = "the player"
+	if not player_name.is_empty():
+		player_ref = player_name
+		desc = "You are talking to %s." % player_name
+		if not player_appearance.is_empty():
+			desc += " %s\n" % player_appearance
+		else:
+			desc += "\n"
+		desc += "Address them by name when appropriate.\n"
+	else:
+		if not player_appearance.is_empty():
+			desc = "You are interacting with the PLAYER. %s\n" % player_appearance
+		else:
+			desc = "You are interacting with the PLAYER.\n"
+		desc += "When you see or refer to the player, recognize them as THE PLAYER - the person you're talking to.\n"
+		desc += "Don't call them 'someone' or 'a person' - you know who they are."
+	
+	return desc
+
+func _get_spontaneous_hint() -> String:
+	"""Get hint about spontaneous actions based on probability."""
+	if not enable_actions or spontaneous_action_chance <= 0.0:
+		return ""
+	
+	# Roll dice to determine if we encourage spontaneous behavior this conversation
+	var roll = randf()
+	if roll < spontaneous_action_chance:
+		return """
+	
+# SPONTANEOUS ACTIONS:
+During conversation, you can naturally do things:
+- Remember something and walk away: "Oh! I left the stove on. [walk_to:Kitchen]"
+- React physically: "Ugh, I'm exhausted. [animate:sit]"
+- Natural movements: *shifts position* [animate:idle]
+
+Keep it NATURAL - don't narrate what you're doing, just DO it."""
+	
+	return ""
+
 # ============ CONVERSATION ============
 
 func start_conversation():
 	"""Called when player presses Enter to talk to NPC."""
 	is_talking = true
+	print("[DEBUG] [", npc_name, "] start_conversation called, is_talking = true")
 	
 	if enable_forgetting and forget_timer:
 		forget_timer.stop()
 	
-	# Auto look at player when conversation starts
-	if enable_actions and auto_look_at_player and action_controller:
-		var player = get_tree().get_first_node_in_group("player")
-		if player:
-			action_controller.look_at_node(player)
+	# Start patience timer
+	if enable_patience and patience_timer:
+		is_waiting_for_response = true
+		print("[DEBUG] [", npc_name, "] Starting patience timer, is_waiting_for_response = true")
+		_start_patience_timer()
+	else:
+		print("[DEBUG] [", npc_name, "] Patience NOT starting - enable_patience=", enable_patience, ", patience_timer=", patience_timer != null)
 	
 	# Show DialogueUI
 	DialogueUI.show_dialogue(self)
@@ -909,15 +1608,22 @@ func start_conversation():
 func end_conversation():
 	is_talking = false
 	
-	# Stop looking at player
-	if enable_actions and action_controller:
-		action_controller.stop_looking()
-	
+	# DON'T stop patience timer - it should keep running if NPC is waiting for response!
+	# Timer only stops when:
+	# 1. Player responds (in talk_to_npc)
+	# 2. Patience timeout triggers (in _on_patience_timeout)
+	# 3. Player truly ends conversation (not implemented yet)	
 	if enable_forgetting and forget_timer:
 		forget_timer.start(forget_delay)
 
 
 func talk_to_npc(message: String):
+	# Stop patience timer - player is responding!
+	if enable_patience and patience_timer:
+		print("[DEBUG] [", npc_name, "] Player responded, STOPPING patience timer")
+		is_waiting_for_response = false
+		patience_timer.stop()
+	
 	if enable_memory:
 		conversation_history.append({"role": "user", "content": message})
 		trim_conversation_history()
@@ -992,7 +1698,7 @@ func _on_response_token(token: String):
 	var cleaned = current_response
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
-	cleaned = _strip_mood_tags(cleaned)
+	cleaned = _strip_emotion_tags(cleaned)
 	
 	# Don't strip action tags during streaming (we'll do it at the end)
 	dialogue_updated.emit(cleaned)
@@ -1007,7 +1713,7 @@ func _on_groq_response_updated(text: String):
 	var cleaned = text
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
-	cleaned = _strip_mood_tags(cleaned)
+	cleaned = _strip_emotion_tags(cleaned)
 	
 	# Don't strip action tags during streaming
 	dialogue_updated.emit(cleaned)
@@ -1022,8 +1728,8 @@ func _on_groq_request_failed(error: String):
 
 
 func _process_response(full_response: String):
-	# Detect and apply mood from response
-	_detect_mood_from_response(full_response)
+	# Detect and apply emotions from response
+	_detect_emotions_from_response(full_response)
 	
 	# Parse for actions BEFORE cleaning
 	var parsed_text = full_response
@@ -1041,7 +1747,7 @@ func _process_response(full_response: String):
 	var cleaned = parsed_text
 	if remove_action_markers:
 		cleaned = clean_response(cleaned)
-	cleaned = _strip_mood_tags(cleaned)
+	cleaned = _strip_emotion_tags(cleaned)
 	
 	if enable_memory:
 		conversation_history.append({"role": "assistant", "content": cleaned})
@@ -1049,6 +1755,21 @@ func _process_response(full_response: String):
 	
 	current_response = cleaned
 	dialogue_finished.emit(cleaned)
+	
+	# Restart patience timer after NPC responds - UNLESS this is autonomous text
+	# Autonomous text = NPC doing their own thing, shouldn't interrupt patience tracking
+	# Patience response = NPC reacting to being ignored, should restart waiting for player
+	# Normal response = NPC replying to player, should restart waiting for player
+	if enable_patience and patience_timer:
+		if is_autonomous_text:
+			print("[DEBUG] [", npc_name, "] Autonomous text - patience timer NOT restarted")
+			# Don't touch the patience timer - let it keep running
+		else:
+			# Normal or patience response - restart timer waiting for player
+			is_waiting_for_response = true
+			is_patience_response = false  # Reset flag
+			print("[DEBUG] [", npc_name, "] NPC finished speaking, RESTARTING patience timer (waiting for player)")
+			_start_patience_timer()
 	
 	# Speak with mood-affected voice
 	_speak(cleaned)
@@ -1132,7 +1853,11 @@ func trim_conversation_history():
 
 func reset_conversation():
 	conversation_history.clear()
-	set_mood(default_mood)
+	
+	# Reset emotions to baseline
+	for emotion in current_emotions.keys():
+		current_emotions[emotion] = baseline_emotions[emotion]
+	emotions_changed.emit(current_emotions.duplicate())
 	
 	# Stop any ongoing actions
 	if enable_actions and action_controller:
@@ -1186,7 +1911,7 @@ func update_target_location(target: Vector3):
 ## Manually trigger an animation
 func play_animation(anim_name: String) -> bool:
 	if enable_actions and action_controller:
-		return await action_controller.play_animation(anim_name)
+		return action_controller.play_animation(anim_name)
 	return false
 
 
@@ -1210,6 +1935,146 @@ func get_action_state() -> String:
 	if enable_actions and action_controller:
 		return action_controller.get_state_description()
 	return "Actions disabled"
+
+# ============ HOSTILITY / ATTACK SYSTEM ============
+
+func _check_hostility():
+	"""Check if NPC should become hostile and attack."""
+	if not enable_hostility or not player_ref:
+		return
+	
+	# Check if hostility has reached attack threshold
+	var hostility_level = current_emotions.get("hostility", 0)
+	
+	var should_be_hostile = hostility_level >= 100
+	
+	# State change
+	if should_be_hostile and not is_hostile:
+		_become_hostile()
+	elif not should_be_hostile and is_hostile:
+		_become_peaceful()
+	
+	# Attempt attack if hostile
+	if is_hostile and can_attack:
+		_try_attack()
+
+
+func _become_hostile():
+	"""Transition to hostile state."""
+	is_hostile = true
+	print("[", npc_name, "] 😡 BECAME HOSTILE! (Hostility: ", current_emotions.get("hostility", 0), ")")
+	
+	# Start chasing player
+	if player_ref and action_controller:
+		_start_chasing_player()
+	
+	# Visual/audio feedback could go here
+	# e.g., change shader tint, play hostile sound
+
+
+func _become_peaceful():
+	"""Return to peaceful state."""
+	is_hostile = false
+	print("[", npc_name, "] 😌 Calmed down... (Hostility: ", current_emotions.get("hostility", 0), ")")
+	
+	# Stop chasing
+	if action_controller:
+		_stop_chasing_player()
+
+
+func _try_attack():
+	"""Attempt to attack player if in range."""
+	if not can_attack or not player_ref:
+		return
+	
+	# Check if player is in same room (if required)
+	if require_same_room_for_attack:
+		var room_mgr = get_node_or_null("/root/RoomManager")
+		if room_mgr and not room_mgr.is_player_in_same_room_as_npc(npc_name):
+			return  # Player not in same room, can't attack
+	
+	# Check distance
+	var distance = global_position.distance_to(player_ref.global_position)
+	if distance > attack_range:
+		# Too far, keep chasing
+		if is_hostile:
+			_update_chase_target()
+		return
+	
+	# Execute attack
+	_execute_attack()
+
+func _start_chasing_player():
+	"""Begin pursuing the player."""
+	if not player_ref or not action_controller:
+		return
+	
+	is_chasing = true
+	print("[", npc_name, "] 🏃 Chasing player!")
+	
+	# Increase movement speed for chase (slower for now)
+	if "walk_speed" in action_controller:
+		action_controller.walk_speed = 2.5  # Slightly faster than normal walk (was 4.0)
+	
+	_update_chase_target()
+
+func _update_chase_target():
+	"""Update navigation to player's current position."""
+	if not player_ref or not action_controller or not is_hostile:
+		return
+	
+	# Navigate to player's position
+	var player_pos = player_ref.global_position
+	action_controller.move_to_position(player_pos)
+	# Run animation will trigger automatically based on movement speed
+
+func _stop_chasing_player():
+	"""Stop pursuing the player."""
+	if not action_controller:
+		return
+	
+	is_chasing = false
+	print("[", npc_name, "] ⏹️ Stopped chasing")
+	
+	# Reset movement speed
+	if "walk_speed" in action_controller:
+		action_controller.walk_speed = 2.0  # Normal walking speed
+	
+	# Stop movement
+	if action_controller.has_method("stop_movement"):
+		action_controller.stop_movement()
+	
+	# Return to idle
+	if action_controller.has_method("play_animation"):
+		action_controller.play_animation("idle")
+
+
+func _execute_attack():
+	"""Deal damage to player."""
+	can_attack = false
+	
+	print("[", npc_name, "] 🗡️ ATTACKING PLAYER! (", attack_damage, " damage)")
+	
+	# Get player health component (try multiple locations)
+	var player_health = player_ref.get_node_or_null("PlayerHealth")
+	if not player_health:
+		# Try as direct child of player
+		for child in player_ref.get_children():
+			if child is PlayerHealth or child.get_class() == "PlayerHealth":
+				player_health = child
+				break
+	
+	if player_health and player_health.has_method("take_damage"):
+		player_health.take_damage(attack_damage, self)
+	else:
+		push_warning("[", npc_name, "] Failed to deal damage - PlayerHealth not found on player!")
+	
+	# Visual feedback (could add attack animation here)
+	
+	# Start cooldown
+	attack_timer.start(attack_cooldown)
+	await attack_timer.timeout
+	can_attack = true
 
 ## Headtracking
 func _on_timer_timeout() -> void:

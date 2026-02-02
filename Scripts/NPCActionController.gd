@@ -26,13 +26,22 @@ signal navigation_complete()
 @export var enable_walk_speed_scaling: bool = true
 @export var min_speed_scale: float = 0.5
 @export var max_speed_scale: float = 2.0
+@export var blend_transition_speed: float = 5.0  ## How fast animations blend (higher = faster)
+@export var movement_blend_speed: float = 8.0  ## How fast idle/walk blends with movement
 var blend_params := {}
 
 # Current state
 var current_animation: String = "idle"
 var is_moving: bool = false
+var is_truly_idle: bool = true  # Track if we're actually standing still
+var is_crouching: bool = false  # Track crouch state for transitions
 var desired_velocity: Vector3 = Vector3.ZERO
 var using_animation_tree: bool = false
+var current_movement_speed: float = 0.0  # Actual movement speed for blend
+
+# Blend state tracking
+var current_blend_values: Dictionary = {}  # Current blend amounts
+var target_blend_values: Dictionary = {}   # Target blend amounts
 
 # Head tracking
 var look_target_node: Node3D = null
@@ -44,10 +53,13 @@ var head_bone_idx: int = -1
 # Animation state
 var is_animation_playing: bool = false
 
-# Anim blend map
-const  AVAILABLE_ANIMATIONS: Dictionary = {
+# Anim blend map - maps action names to AnimationTree blend node names
+const AVAILABLE_ANIMATIONS: Dictionary = {
 	"idle": "Idle",
 	"walk": "Walk",
+	"run": "Running",
+	"crouch": "Crouching",
+	"crouchwalk": "CrouchWalking",
 	"sit": "Sit",
 	"dance": "Dance",
 	"macarena": "DanceMacarena",
@@ -56,9 +68,16 @@ const  AVAILABLE_ANIMATIONS: Dictionary = {
 	"break": "DanceBreak"
 }
 
+# Crouch state - for managing crouch transitions
+const CROUCH_ANIMS := ["crouch", "crouchwalk"]
+const STANDING_ANIMS := ["idle", "walk", "run", "sit", "dance", "macarena", "chicken", "tenna", "break"]
+
 const ANIM_LENGTH := {
 	"idle": 0.0,
 	"walk": 0.0,
+	"run": 0.0,
+	"crouch": 0.0,
+	"crouchwalk": 0.0,
 	"sit": 0.0,
 	"dance": 3.0,
 	"macarena": 4.0,
@@ -68,39 +87,165 @@ const ANIM_LENGTH := {
 }
 
 
-const HEAD_TRACK_ALLOWED_ANIMS := ["idle", "walk", "sit"]
+const HEAD_TRACK_ALLOWED_ANIMS := ["idle", "walk", "run", "crouch", "crouchwalk", "sit"]
+
+func _match_animation_name(input: String) -> String:
+	"""Fuzzy match animation names to handle variations"""
+	var normalized = input.to_lower().strip_edges()
+	
+	# Direct match
+	if AVAILABLE_ANIMATIONS.has(normalized):
+		return normalized
+	
+	# Try partial matches
+	if "break" in normalized or "breakdance" in normalized:
+		return "break"
+	if "macarena" in normalized:
+		return "macarena"
+	if "chicken" in normalized:
+		return "chicken"
+	if "tenna" in normalized:
+		return "tenna"
+	if "crouchwalk" in normalized or "crouch_walk" in normalized or "sneakwalk" in normalized:
+		return "crouchwalk"
+	if "crouch" in normalized or "sneak" in normalized or "duck" in normalized:
+		return "crouch"
+	if "run" in normalized or "sprint" in normalized or "jog" in normalized:
+		return "run"
+	if "dance" in normalized:
+		return "dance"
+	if "sit" in normalized:
+		return "sit"
+	if "walk" in normalized:
+		return "walk"
+	if "idle" in normalized or "stand" in normalized:
+		return "idle"
+	
+	return ""  # No match
 
 func _ready():
-	animation_tree.active = true
+	# Detect if we should use AnimationTree or AnimationPlayer
+	if animation_tree:
+		animation_tree.active = true
+		using_animation_tree = true
+		print("[NPCActionController] Using AnimationTree for blend-based animations")
+		
+		for key in AVAILABLE_ANIMATIONS.values():
+			blend_params[key] = "parameters/%s/blend_amount" % key
+		
+		# Debug: Print what parameters are available
+		_debug_print_animation_tree_params()
+		
+		# Set Walk as default (used for both idle and walking)
+		_set_active_blend("Walk", 1.0)
+	elif animation_player:
+		using_animation_tree = false
+		print("[NPCActionController] Using AnimationPlayer for direct animations")
+	else:
+		push_error("[NPCActionController] No AnimationTree or AnimationPlayer found!")
 	
-	for key in AVAILABLE_ANIMATIONS.values():
-		blend_params[key] = "parameters/%s/blend_amount" % key
 	# Setup navigation
 	if navigation_agent:
 		navigation_agent.velocity_computed.connect(_on_velocity_computed)
 		navigation_agent.target_reached.connect(_on_navigation_complete)
+	
+	# Initialize blend state tracking
+	if using_animation_tree:
+		for blend_node in blend_params.keys():
+			current_blend_values[blend_node] = 0.0
+			target_blend_values[blend_node] = 0.0
+		# Set Idle as default
+		target_blend_values["Idle"] = 1.0
+		is_truly_idle = true
+
+func _process(delta):
+	# Smoothly interpolate blend amounts for AnimationTree
+	if using_animation_tree and animation_tree:
+		for blend_node in blend_params.keys():
+			var current = current_blend_values.get(blend_node, 0.0)
+			var target = target_blend_values.get(blend_node, 0.0)
+			
+			# Lerp towards target
+			var new_value = lerp(current, target, blend_transition_speed * delta)
+			current_blend_values[blend_node] = new_value
+			
+			# Apply to AnimationTree
+			var param_path = blend_params[blend_node]
+			if animation_tree.get(param_path) != null:
+				animation_tree.set(param_path, new_value)
+
+func _debug_print_animation_tree_params():
+	"""Debug helper to see what parameters actually exist in the AnimationTree"""
+	if not animation_tree:
+		return
+	
+	print("[NPCActionController] === AnimationTree Parameters ===")
+	for anim_name in AVAILABLE_ANIMATIONS.values():
+		var param_path = "parameters/%s/blend_amount" % anim_name
+		# Try to get the parameter - will return null if it doesn't exist
+		var param_value = animation_tree.get(param_path)
+		if param_value != null:
+			print("[NPCActionController]   ✓ ", param_path, " EXISTS (current: ", param_value, ")")
+		else:
+			print("[NPCActionController]   ✗ ", param_path, " NOT FOUND")
+	print("[NPCActionController] =================================")
 
 func _physics_process(delta):
+	# Get gravity from project settings
+	var gravity = ProjectSettings.get_setting("physics/3d/default_gravity", 9.8)
+	
+	# Calculate actual movement speed from body velocity (horizontal only for animation)
+	if npc_body:
+		var horizontal_velocity = Vector3(npc_body.velocity.x, 0, npc_body.velocity.z)
+		var target_speed = horizontal_velocity.length()
+		
+		# Smooth the speed value
+		current_movement_speed = lerp(current_movement_speed, target_speed, movement_blend_speed * delta)
+		
+		# Always update movement blend when using movement animations
+		if using_animation_tree and (current_animation == "idle" or current_animation == "walk" or current_animation == "run"):
+			_update_movement_blend()
+	
 	# Movement
 	if is_moving and navigation_agent:
 		if navigation_agent.is_navigation_finished():
 			_on_navigation_complete()
 		else:
 			var next_position = navigation_agent.get_next_path_position()
-			var direction = (next_position - npc_body.global_position).normalized()
+			var direction = (next_position - npc_body.global_position)
+			
+			# Use horizontal direction for movement, let gravity handle Y
+			direction.y = 0
+			if direction.length() > 0.01:
+				direction = direction.normalized()
 			
 			var target_rotation = atan2(-direction.x, -direction.z)
 			npc_body.rotation.y = lerp_angle(npc_body.rotation.y, target_rotation, turn_speed * delta)
 			
+			# Set horizontal velocity
 			desired_velocity = direction * walk_speed
 			navigation_agent.set_velocity(desired_velocity)
 			
-			if enable_walk_speed_scaling:
-				_update_walk_animation_speed(desired_velocity.length())
+			# Apply horizontal movement + gravity
+			npc_body.velocity.x = desired_velocity.x
+			npc_body.velocity.z = desired_velocity.z
+			if not npc_body.is_on_floor():
+				npc_body.velocity.y -= gravity * delta
+			else:
+				npc_body.velocity.y = 0
+			
+			npc_body.move_and_slide()
 	else:
 		desired_velocity = Vector3.ZERO
-		if enable_walk_speed_scaling:
-			_update_walk_animation_speed(0.0)
+		if npc_body:
+			# Still apply gravity when not moving
+			npc_body.velocity.x = 0
+			npc_body.velocity.z = 0
+			if not npc_body.is_on_floor():
+				npc_body.velocity.y -= gravity * delta
+			else:
+				npc_body.velocity.y = 0
+			npc_body.move_and_slide()
 
 func _on_velocity_computed(safe_velocity: Vector3):
 	desired_velocity = safe_velocity
@@ -123,33 +268,98 @@ func play_animation(anim_name: String) -> bool:
 		return _play_animation_with_player(anim_name)
 	return false
 
+
+func _validate_crouch_transition(target_key: String) -> String:
+	"""Validate and potentially modify animation based on crouch state.
+	Returns the animation to actually play (may differ from requested)."""
+	
+	var target_is_crouch = target_key in CROUCH_ANIMS
+	var target_is_standing = target_key in STANDING_ANIMS
+	
+	# Rule 1: Can only crouchwalk if already crouching
+	if target_key == "crouchwalk" and not is_crouching:
+		print("[NPCActionController] 🚫 Can't crouchwalk - not crouching. Crouching first.")
+		return "crouch"  # Crouch first instead
+	
+	# Rule 2: Must go to crouch idle before standing
+	if is_crouching and target_is_standing and target_key != "idle":
+		# If crouching and trying to do standing anim (walk, run, dance, etc.)
+		# First need to stand up (go to idle)
+		print("[NPCActionController] 🚫 Can't ", target_key, " while crouching. Standing up first.")
+		return "idle"  # Stand up first
+	
+	# Rule 3: Transition from crouchwalk should go to crouch idle, not standing
+	if current_animation == "crouchwalk" and target_is_standing:
+		print("[NPCActionController] 🚫 Transitioning from crouchwalk to crouch first.")
+		return "crouch"
+	
+	return target_key  # No modification needed
+
+
 func _play_animation_with_tree(anim_name: String) -> bool:
-	var key := anim_name.to_lower()
-	if not AVAILABLE_ANIMATIONS.has(key):
+	var key := _match_animation_name(anim_name)
+	
+	if key == "":
+		push_error("[NPCActionController] ❌ Unknown animation: '", anim_name, "' (available: ", AVAILABLE_ANIMATIONS.keys(), ")")
 		return false
 	
-	if is_animation_playing and current_animation != anim_name:
+	if not AVAILABLE_ANIMATIONS.has(key):
+		push_error("[NPCActionController] ❌ Animation '", key, "' not in mapping")
+		return false
+	
+	# Validate crouch state transitions
+	var validated_key = _validate_crouch_transition(key)
+	if validated_key != key:
+		print("[NPCActionController] 📍 Animation redirected: ", key, " -> ", validated_key)
+		key = validated_key
+	
+	if is_animation_playing and current_animation != key:
 		action_completed.emit(current_animation)
 	
-	current_animation = anim_name
+	current_animation = key  # Use the matched key
 	is_animation_playing = true
+	
+	# Update crouch state
+	is_crouching = key in CROUCH_ANIMS
+	
+	# Track if we're truly idle (for walk blend control)
+	is_truly_idle = (key == "idle" or key == "crouch")
 	
 	# Head tracking
 	look_at_modifier_3d.active = key in HEAD_TRACK_ALLOWED_ANIMS
 	
-	_set_active_blend(AVAILABLE_ANIMATIONS[key])
+	# For idle/walk/run, let the movement system handle blending
+	if key == "idle" or key == "walk" or key == "run":
+		# Don't force a specific blend - let _update_movement_blend handle it
+		# But do turn off other animations
+		for blend_name in blend_params.keys():
+			if blend_name != "Idle" and blend_name != "Walk" and blend_name != "Running":
+				target_blend_values[blend_name] = 0.0
+		print("[NPCActionController] 🎬 Movement mode: '", key, "' (speed-controlled blend)")
+	else:
+		# For other animations, set the appropriate blend node
+		var blend_node = AVAILABLE_ANIMATIONS[key]
+		print("[NPCActionController] 🎬 Playing: '", anim_name, "' -> '", key, "' -> blend: ", blend_node, " (crouching: ", is_crouching, ")")
+		_set_active_blend(blend_node)
 	
-	action_started.emit(anim_name)
-	_wait_for_animation_finish(anim_name)
-	return true
-	_wait_for_animation_finish(anim_name)
+	action_started.emit(key)
+	_wait_for_animation_finish(key)
 	return true
 
 func _set_active_blend(active: String, value := 1.0):
-	for name in blend_params.keys():
-		animation_tree.set(blend_params[name], 0.0)
+	if not animation_tree or not using_animation_tree:
+		return
 	
-	animation_tree.set(blend_params[active], value)
+	# Set all target blend amounts to 0
+	for blend_name in blend_params.keys():
+		target_blend_values[blend_name] = 0.0
+	
+	# Set active animation target to specified value
+	if blend_params.has(active):
+		target_blend_values[active] = value
+		print("[NPCActionController] 🎯 Target blend: ", active, " = ", value)
+	else:
+		push_error("[NPCActionController] ✗ No blend node for: ", active)
 
 
 func _play_animation_with_player(anim_name: String) -> bool:
@@ -200,19 +410,39 @@ func stop_animation():
 func get_available_animations() -> Array:
 	return AVAILABLE_ANIMATIONS.keys()
 
-func _update_walk_animation_speed(current_speed: float):
-	if current_animation != "walk":
+
+func _update_movement_blend():
+	"""Update walk/idle/run blend based on actual movement speed.
+	This creates smooth transitions between standing, walking, and running."""
+	if not animation_tree or not using_animation_tree:
 		return
 	
-	var speed_scale := 1.0
-	if walk_speed > 0.0:
-		speed_scale = clamp(
-			current_speed / walk_speed,
-			min_speed_scale,
-			max_speed_scale
-		)
+	# Use fixed thresholds for animation states (not relative to walk_speed)
+	# This way changing walk_speed doesn't affect which animation plays
+	var speed = current_movement_speed
 	
-	animation_tree.set("parameters/Walking/scale", speed_scale)
+	# Determine animation state based on absolute speed
+	if speed > 3.0:  # Running (fast movement)
+		# Transition to running
+		target_blend_values["Idle"] = 0.0
+		target_blend_values["Walk"] = 0.0
+		target_blend_values["Running"] = 1.0
+		current_animation = "run"
+		is_truly_idle = false
+	elif speed > 0.2:  # Walking (slow to medium movement)
+		# Blend between idle and walk based on speed
+		var walk_blend = clamp(speed / 2.0, 0.0, 1.0)
+		target_blend_values["Idle"] = 1.0 - walk_blend
+		target_blend_values["Walk"] = walk_blend
+		target_blend_values["Running"] = 0.0
+		current_animation = "walk"
+		is_truly_idle = false
+	else:  # Idle (stationary)
+		target_blend_values["Idle"] = 1.0
+		target_blend_values["Walk"] = 0.0
+		target_blend_values["Running"] = 0.0
+		current_animation = "idle"
+		is_truly_idle = true
 
 
 # ============ NAVIGATION ============
@@ -241,8 +471,14 @@ func move_to_position(target_pos: Vector3) -> void:
 		var path = navigation_agent.get_current_navigation_path()
 		print("[NPCActionController] ✅ Navigation path valid (", path.size(), " waypoints)")
 	
-	if current_animation != "walk":
-		play_animation("walk")
+	# Set to walk mode - the movement blend will handle animation based on speed
+	current_animation = "walk"
+	is_truly_idle = false
+	# Turn off any other animations so walk/idle can blend
+	for name in blend_params.keys():
+		if name != "Idle" and name != "Walk":
+			target_blend_values[name] = 0.0
+
 
 func move_to_location(location_name: String) -> bool:
 	print("[NPCActionController] 🔍 Looking for location: '", location_name, "'")
@@ -251,15 +487,6 @@ func move_to_location(location_name: String) -> bool:
 	
 	if not target:
 		push_error("[NPCActionController] ❌ Location NOT FOUND: '", location_name, "'")
-		return false
-	
-	print("[NPCActionController] ✅ Found '", location_name, "' at position: ", target.global_position)
-	move_to_position(target.global_position)
-	return true
-	
-	if not target:
-		push_error("[NPCActionController] ❌ Location NOT FOUND: '", location_name, "'")
-		print("[NPCActionController] Available room nodes:")
 		_debug_print_room_nodes()
 		return false
 	
@@ -270,6 +497,7 @@ func move_to_location(location_name: String) -> bool:
 	print("[NPCActionController] ✅ Found '", location_name, "' at position: ", target.global_position)
 	move_to_position(target.global_position)
 	return true
+
 
 # DEBUG: Print available room nodes
 func _debug_print_room_nodes():
@@ -284,26 +512,18 @@ func _debug_print_room_nodes():
 func stop_moving() -> void:
 	is_moving = false
 	desired_velocity = Vector3.ZERO
+	if npc_body:
+		npc_body.velocity = Vector3.ZERO
 	
+	# Set to idle mode - the movement blend will handle the smooth transition
+	# since current_movement_speed will naturally decay to 0
 	if current_animation == "walk":
-		play_animation("idle")
+		current_animation = "idle"
+		is_truly_idle = true
 		# Explicitly re-enable head tracking after walking
 		look_at_modifier_3d.active = true
-
-# ============ HEAD TRACKING (DISABLED) ============
-
-## Look at a node - DISABLED, just prints warning
-func look_at_node(target_node: Node3D) -> void:
-	print("[NPCActionController] Head tracking is disabled (causes visual bugs)")
-	print("[NPCActionController] Bone manipulation needs more work")
-
-## Look at a position - DISABLED
-func look_at_position(world_pos: Vector3) -> void:
-	print("[NPCActionController] Head tracking is disabled (causes visual bugs)")
-
-## Stop looking - DISABLED
-func stop_looking() -> void:
-	print("[NPCActionController] Head tracking is disabled")
+	
+	print("[NPCActionController] 🛑 Stopped moving (blend will smooth to idle)")
 
 # ============ ACTION EXECUTION ============
 
@@ -348,11 +568,22 @@ func execute_action(action_dict: Dictionary) -> bool:
 func get_state_description() -> String:
 	var state = ""
 	if is_moving:
-		state += "Currently walking. "
+		if is_crouching:
+			state += "Currently crouch-walking. "
+		else:
+			state += "Currently walking. "
 	else:
-		state += "Standing still. "
-	state += "Playing animation: " + current_animation + ". "
+		if is_crouching:
+			state += "Crouching. "
+		else:
+			state += "Standing. "
+	state += "Animation: " + current_animation + ". "
 	return state
+
+
+func is_currently_crouching() -> bool:
+	return is_crouching
+
 
 func get_available_actions_description() -> String:
 	return """

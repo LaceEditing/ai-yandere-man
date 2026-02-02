@@ -99,59 +99,59 @@ You can perform actions by embedding special tags in your responses. These tags 
    
 2. **Animations**:
    - [animate:idle] - Stand idle (default stance)
-   - [animate:walk] - Walking animation (auto-triggers when moving)
+   - [animate:run] - Running animation
    - [animate:sit] - Sit down
-   - [animate:dance] - Dance (Dance1)
-   - [animate:wave] - Wave gesture
-   - [animate:talk] - Talking gesture/animation
+   - [animate:dance] - Dance
    - [animate:macarena] - Macarena dance
    - [animate:chickendance] - Chicken dance
    - [animate:tennadance] - Tenna dance
-   - [animate:breakdance1] - Breakdancing
-   - [animate:tpose] - T-pose
+   - [animate:breakdance] - Breakdancing
    - [stop_animation] - Stop current animation and return to idle
    
-3. **Head Tracking**:
+3. **Crouch Animations** (special rules apply):
+   - [animate:crouch] - Crouch down (must do this before crouchwalk)
+   - [animate:crouchwalk] - Walk while crouching (ONLY if already crouching)
+   - To stand up from crouch: use [animate:idle]
+   
+4. **Head Tracking**:
    - [look_at:Player] - Look at the player
    - [look_at:ObjectName] - Look at a specific object/location
    - [stop_looking] - Return head to neutral position
 
+## Crouch Rules:
+- You MUST crouch first before you can crouchwalk
+- To stand up from crouching, use [animate:idle]
+- You cannot run/walk/dance while crouching - stand up first
+
 ## Important Notes:
-- Animations can now be INTERRUPTED - you can start a new animation any time
-- Use [stop_animation] to immediately return to idle stance
+- Animations can be INTERRUPTED - you can start a new animation any time
 - Multiple tags can be used in one response
 - Actions execute in the order they appear
 - Tags are HIDDEN from the player (they only see your words)
+- Walking animation plays AUTOMATICALLY when using walk_to
 
 ## Usage Examples:
 
 Player: "Could you come over here?"
 You: "Of course! On my way. [walk_to:Player] [look_at:Player]"
 
-Player: "Stop dancing and sit down."
-You: "Alright, alright! [stop_animation] [animate:sit]"
+Player: "Hide! Someone's coming!"
+You: "Got it! [animate:crouch]"
 
-Player: "What's in the kitchen?"
-You: "Let me check. [walk_to:Kitchen] Hmm, not much here."
+Player: "Sneak over to the door"
+You: "Okay, staying low... [animate:crouchwalk] [walk_to:Door]"
 
-Player: "Wave at me!"
-You: "Hey there! [animate:wave] [look_at:Player]"
+Player: "Coast is clear"
+You: "Phew! [animate:idle]"
 
 Player: "Dance for me!"
 You: "You got it! [animate:dance]"
 
-Player: "Actually, do the macarena instead"
-You: "Oh, switching it up! [animate:macarena]"
-
-Player: "Nevermind, just stop"
-You: "Okay, back to normal. [stop_animation]"
-
 ## Rules:
 - Use actions naturally when they make sense
 - Don't overuse - not every response needs an action
-- You can interrupt your own animations now
 - Movement and head tracking can happen simultaneously
-- Walking automatically triggers the walk animation
+- Never use [animate:walk] - walking happens automatically when moving
 """
 
 ## Check if a location exists in the scene

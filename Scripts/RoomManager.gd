@@ -140,6 +140,25 @@ func get_all_locations() -> Dictionary:
 		"npcs": npc_locations
 	}
 
+
+func get_available_room_names() -> Array:
+	"""Get list of all available room names in the scene."""
+	var room_names: Array = []
+	var all_rooms = get_tree().get_nodes_in_group("rooms")
+	
+	for room in all_rooms:
+		if room is Room:
+			room_names.append(room.get_room_name())
+	
+	return room_names
+
+
+func get_other_rooms(exclude_room: String) -> Array:
+	"""Get all rooms except the specified one."""
+	var all_rooms = get_available_room_names()
+	return all_rooms.filter(func(r): return r != exclude_room)
+
+
 func print_all_locations():
 	print("=== Room Locations ===")
 	print("Player: ", player_current_room)

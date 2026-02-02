@@ -254,8 +254,8 @@ func _on_dialogue_updated(text: String):
 			_start_typewriter()
 
 func _on_dialogue_finished(text: String):
-	# Don't show NPC response if input is open (suppress greeting)
-	if input_prompt.visible:
+	# Don't show NPC response if input is VISIBLE and FOCUSED (suppress greeting during active chat)
+	if input_prompt.visible and input_field.has_focus():
 		return
 	
 	# Show NPC text container if not visible
@@ -319,9 +319,8 @@ func _on_hide_timer_timeout():
 	# Hide UI but DON'T stop voice - let it finish naturally
 	npc_text_container.hide()
 	
-	# If no conversation is active anymore, fully close
-	if not current_npc or not is_generating:
-		close_dialogue()
+	# Always fully close when timer expires
+	close_dialogue()
 
 # ============================================
 # UI SCALING SYSTEM
