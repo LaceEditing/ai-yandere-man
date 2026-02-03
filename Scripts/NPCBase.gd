@@ -129,6 +129,16 @@ enum AzureVoice {
 @export var azure_voice: AzureVoice = AzureVoice.GUY ## Voice for Azure cloud TTS
 @export var use_azure_emotion_styles: bool = true ## Use Azure's expressive styles based on emotions
 
+@export_subgroup("RVC Voice Cloning")
+@export var enable_rvc: bool = false ## Post-process TTS through RVC voice conversion
+@export_file("*.pth") var rvc_model_path: String = "" ## Drag .pth model file here
+@export_file("*.index") var rvc_index_path: String = "" ## Drag .index file here (optional but recommended)
+@export_range(-12, 12, 1) var rvc_pitch_shift: int = 0 ## Pitch shift in semitones
+@export_enum("crepe-tiny:Fast", "crepe:Balanced", "rmvpe:Quality") var rvc_quality: String = "crepe-tiny" ## Speed vs quality trade-off
+@export_range(64, 512, 64) var rvc_hop_length: int = 256 ## Higher = faster, lower = more precise pitch tracking
+@export var rvc_use_gpu: bool = true ## Use GPU acceleration if available (requires CUDA-enabled PyTorch)
+@export_range(-1, 8, 1) var rvc_cuda_device: int = -1 ## GPU device index (-1 = auto-detect best compatible)
+
 # Text cleaning settings
 @export_group("Response Filtering")
 @export var remove_action_markers: bool = true
@@ -208,8 +218,10 @@ var current_room: String = "unknown"
 # Voice state
 var kokoro_tts: KokoroTTS = null
 var azure_tts: AzureTTS = null
+var rvc_processor: RVCProcessor = null
 var voice_player: AudioStreamPlayer3D = null
 var is_speaking: bool = false
+var _pending_rvc_audio: AudioStreamWAV = null  # Audio waiting for RVC processing
 
 # Action system state
 var pending_actions: Array = []
@@ -1221,6 +1233,10 @@ func _setup_voice():
 			_setup_azure_tts()
 		TTSProvider.LOCAL_KOKORO, _:
 			_setup_kokoro_tts()
+	
+	# Setup RVC if enabled
+	if enable_rvc:
+		_setup_rvc()
 
 
 func _setup_kokoro_tts():
@@ -1232,8 +1248,11 @@ func _setup_kokoro_tts():
 	kokoro_tts.voice_id = VOICE_PRESET_IDS.get(voice_preset, 0)
 	kokoro_tts.speed = voice_speed
 	
-	# Connect signals
-	kokoro_tts.synthesis_completed.connect(_on_voice_ready)
+	# Connect signals - route through RVC if enabled, otherwise direct to voice ready
+	if enable_rvc:
+		kokoro_tts.synthesis_completed.connect(_on_tts_ready_for_rvc)
+	else:
+		kokoro_tts.synthesis_completed.connect(_on_voice_ready)
 	kokoro_tts.synthesis_failed.connect(_on_voice_failed)
 	
 	if kokoro_tts.is_available():
@@ -1252,14 +1271,50 @@ func _setup_azure_tts():
 	azure_tts.set_voice(voice_name)
 	azure_tts.set_rate(voice_speed)
 	
-	# Connect signals
-	azure_tts.synthesis_completed.connect(_on_voice_ready)
+	# Connect signals - route through RVC if enabled, otherwise direct to voice ready
+	if enable_rvc:
+		azure_tts.synthesis_completed.connect(_on_tts_ready_for_rvc)
+	else:
+		azure_tts.synthesis_completed.connect(_on_voice_ready)
 	azure_tts.synthesis_failed.connect(_on_voice_failed)
 	
 	if azure_tts.is_available():
 		print("[", npc_name, "] Voice (Azure): ", azure_tts.get_voice_description(voice_name))
 	else:
 		print("[", npc_name, "] Warning: Azure TTS not configured - set API key in AI Settings")
+
+
+func _setup_rvc():
+	"""Setup RVC voice conversion post-processor."""
+	rvc_processor = RVCProcessor.new()
+	add_child(rvc_processor)
+	
+	# Configure RVC settings
+	rvc_processor.pitch_shift = rvc_pitch_shift
+	rvc_processor.f0_method = rvc_quality  # "crepe-tiny", "crepe", or "rmvpe"
+	rvc_processor.hop_length = rvc_hop_length
+	rvc_processor.use_gpu = rvc_use_gpu
+	rvc_processor.cuda_device = rvc_cuda_device
+	
+	# Set model paths directly if specified (drag-and-drop from Inspector)
+	if not rvc_model_path.is_empty():
+		var global_pth = ProjectSettings.globalize_path(rvc_model_path)
+		var global_idx = ""
+		if not rvc_index_path.is_empty():
+			global_idx = ProjectSettings.globalize_path(rvc_index_path)
+		rvc_processor.set_model_paths(global_pth, global_idx)
+	
+	# Connect signals
+	rvc_processor.conversion_completed.connect(_on_voice_ready)
+	rvc_processor.conversion_failed.connect(_on_rvc_failed)
+	
+	if rvc_processor.is_available():
+		var model_name = rvc_model_path.get_file().get_basename() if not rvc_model_path.is_empty() else "none"
+		print("[", npc_name, "] Voice (RVC): ", model_name, " (pitch: ", rvc_pitch_shift, ", quality: ", rvc_quality, ")")
+	elif rvc_model_path.is_empty():
+		print("[", npc_name, "] RVC enabled but no model selected")
+	else:
+		print("[", npc_name, "] Warning: RVC not available")
 
 
 func _get_mood_adjusted_speed() -> float:
@@ -1972,6 +2027,28 @@ func _on_voice_ready(audio: AudioStreamWAV):
 	voice_player.play()
 	is_speaking = true
 	voice_started.emit()
+
+
+func _on_tts_ready_for_rvc(audio: AudioStreamWAV):
+	"""TTS completed - now send through RVC for voice conversion."""
+	if not rvc_processor or not rvc_processor.is_available():
+		# RVC not available, play original audio
+		_on_voice_ready(audio)
+		return
+	
+	print("[", npc_name, "] Sending TTS audio to RVC for conversion...")
+	rvc_processor.convert(audio)
+
+
+func _on_rvc_failed(error: String):
+	"""RVC conversion failed - play original TTS audio if available."""
+	print("[", npc_name, "] RVC error: ", error)
+	# If we have pending audio from TTS, play it instead
+	if _pending_rvc_audio:
+		_on_voice_ready(_pending_rvc_audio)
+		_pending_rvc_audio = null
+	else:
+		is_speaking = false
 
 
 func _on_voice_failed(error: String):

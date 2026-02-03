@@ -136,6 +136,15 @@ NPCs support two TTS providers, selectable per-NPC via `tts_provider` export:
 # hostility → shouting, trust → friendly
 ```
 
+**RVC Voice Cloning (Post-Process)** - [Scripts/RVCProcessor.gd](Scripts/RVCProcessor.gd):
+- Optional post-processing to clone any voice using RVC models
+- Works with both Kokoro and Azure TTS as input
+- Uses rvc-cli Python project in `rvc/` folder, models in `rvc/models/`
+- Requires Python 3.10 or 3.11 (NOT 3.14+) with dependencies installed
+- Configure per-NPC: `enable_rvc`, `rvc_model_name`, `rvc_pitch_shift`
+- Adds ~1-3 seconds latency but allows any voice to sound like your target
+- RVC models (.pth + .index files) can be downloaded from voice.ai, weights.gg, etc.
+
 ### Action System Workflow
 1. LLM generates response with embedded tags: `"Sure! [animate:sit] Let me sit down."`
 2. NPCActionParser extracts actions: `{text: "Sure! Let me sit down.", actions: [{action: "play_animation", animation: "sit"}]}`
