@@ -483,11 +483,17 @@ func move_to_position(target_pos: Vector3) -> void:
 func move_to_location(location_name: String) -> bool:
 	print("[NPCActionController] 🔍 Looking for location: '", location_name, "'")
 	
+	# First check if any rooms exist at all
+	var available_rooms = RoomManager.get_available_room_names()
+	if available_rooms.size() == 0:
+		push_warning("[NPCActionController] ⚠️ No Room nodes in scene! Cannot navigate to '", location_name, "'")
+		push_warning("[NPCActionController] 💡 To fix: Add Area3D nodes with Room.gd script and add to 'rooms' group")
+		return false
+	
 	var target = RoomManager.get_room_node(location_name)
 	
 	if not target:
-		push_error("[NPCActionController] ❌ Location NOT FOUND: '", location_name, "'")
-		_debug_print_room_nodes()
+		push_warning("[NPCActionController] ❌ Location NOT FOUND: '", location_name, "' (available: ", available_rooms, ")")
 		return false
 	
 	if not target is Node3D:

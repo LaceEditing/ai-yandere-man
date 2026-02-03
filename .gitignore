@@ -4,3 +4,4 @@
 *.so
 *.gguf
 /tts
+LICENSE.txt

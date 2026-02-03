@@ -27,6 +27,26 @@ enum VoicePreset {
 	EF_DORA,
 }
 
+enum TTSProvider {
+	LOCAL_KOKORO,  ## Local Kokoro TTS (free, offline)
+	AZURE,         ## Azure Cognitive Services (cloud, expressive)
+}
+
+enum AzureVoice {
+	# American Female - Expressive
+	JENNY,
+	ARIA,
+	SARA,
+	# American Male - Expressive
+	GUY,
+	DAVIS,
+	TONY,
+	JASON,
+	# British
+	SONIA_UK,
+	RYAN_UK,
+}
+
 # ============ EXPORTS ============
 
 # NPC Identity
@@ -97,10 +117,17 @@ enum VoicePreset {
 @export_group("Voice Settings")
 @export var enable_voice: bool = true
 @export var speak_greeting: bool = true ## Auto-speak the generated greeting (requires enable_voice)
-@export var voice_preset: VoicePreset = VoicePreset.AM_ADAM
+@export var tts_provider: TTSProvider = TTSProvider.LOCAL_KOKORO ## TTS engine to use
 @export_range(0.5, 1.5, 0.05) var voice_speed: float = 1.0 ## Base speed (lower = faster)
 @export_range(-20.0, 6.0, 0.5, "suffix:dB") var voice_volume_db: float = 0.0
 @export var mood_affects_voice: bool = true ## Mood changes voice speed/tone
+
+@export_subgroup("Kokoro (Local TTS)")
+@export var voice_preset: VoicePreset = VoicePreset.AM_ADAM ## Voice for local Kokoro TTS
+
+@export_subgroup("Azure (Cloud TTS)")
+@export var azure_voice: AzureVoice = AzureVoice.GUY ## Voice for Azure cloud TTS
+@export var use_azure_emotion_styles: bool = true ## Use Azure's expressive styles based on emotions
 
 # Text cleaning settings
 @export_group("Response Filtering")
@@ -180,6 +207,7 @@ var current_room: String = "unknown"
 
 # Voice state
 var kokoro_tts: KokoroTTS = null
+var azure_tts: AzureTTS = null
 var voice_player: AudioStreamPlayer3D = null
 var is_speaking: bool = false
 
@@ -226,7 +254,12 @@ const EMOTION_DESCRIPTORS: Dictionary = {
 	"flirty": "playful and suggestive",
 	"tired": "exhausted and sluggish",
 	"trust": "trusting and comfortable",
-	"hostility": "hostile and dangerous"
+	"hostility": "hostile and dangerous",
+	# Voice style emotions (for Azure TTS expressive styles)
+	"shouting": "yelling loudly",
+	"whispering": "speaking very quietly",
+	"hopeful": "optimistic and expectant",
+	"excited": "energetic and thrilled"
 }
 
 const EMOTION_SPEECH_STYLES: Dictionary = {
@@ -239,10 +272,15 @@ const EMOTION_SPEECH_STYLES: Dictionary = {
 	"flirty": "Speak playfully~ with a teasing tone~",
 	"tired": "Speak... slowly... like everything... is an effort...",
 	"trust": "Speak warmly and openly, like to a friend.",
-	"hostility": "Speak with menace and threat. Use intimidating language."
+	"hostility": "Speak with menace and threat. Use intimidating language.",
+	# Voice style emotions (for Azure TTS)
+	"shouting": "SPEAK LOUDLY! YELL! RAISE YOUR VOICE!",
+	"whispering": "speak very quietly... almost inaudible... secrets...",
+	"hopeful": "Speak with optimism and anticipation!",
+	"excited": "Speak with HIGH ENERGY! Fast and thrilled!"
 }
 
-# Voice ID mapping
+# Voice ID mapping (Kokoro)
 const VOICE_PRESET_IDS: Dictionary = {
 	VoicePreset.AF_BELLA: 0,
 	VoicePreset.AF_NICOLE: 1,
@@ -255,6 +293,19 @@ const VOICE_PRESET_IDS: Dictionary = {
 	VoicePreset.BM_GEORGE: 8,
 	VoicePreset.BM_LEWIS: 9,
 	VoicePreset.EF_DORA: 10,
+}
+
+# Azure voice name mapping
+const AZURE_VOICE_NAMES: Dictionary = {
+	AzureVoice.JENNY: "en-US-JennyNeural",
+	AzureVoice.ARIA: "en-US-AriaNeural",
+	AzureVoice.SARA: "en-US-SaraNeural",
+	AzureVoice.GUY: "en-US-GuyNeural",
+	AzureVoice.DAVIS: "en-US-DavisNeural",
+	AzureVoice.TONY: "en-US-TonyNeural",
+	AzureVoice.JASON: "en-US-JasonNeural",
+	AzureVoice.SONIA_UK: "en-GB-SoniaNeural",
+	AzureVoice.RYAN_UK: "en-GB-RyanNeural",
 }
 
 # ============ LIFECYCLE ============
@@ -503,11 +554,17 @@ func _build_autonomous_decision_prompt() -> String:
 	prompt += "You are in: %s\n" % current_room
 	
 	# Get available OTHER rooms (excluding current)
+	var all_rooms = RoomManager.get_available_room_names()
 	var other_rooms = RoomManager.get_other_rooms(current_room)
-	if other_rooms.size() > 0:
+	
+	if all_rooms.size() == 0:
+		# NO ROOMS DEFINED - disable all movement
+		prompt += "⚠️ MOVEMENT DISABLED: No navigable locations exist in this scene.\n"
+		prompt += "DO NOT use [walk_to:...] commands - they will fail!\n"
+	elif other_rooms.size() > 0:
 		prompt += "Other locations you can go to: %s\n" % ", ".join(other_rooms)
 	else:
-		prompt += "There are no other rooms to walk to.\n"
+		prompt += "There are no other rooms to walk to (you're in the only room).\n"
 	
 	# Current physical state
 	if action_controller:
@@ -660,23 +717,39 @@ func _validate_autonomous_action(action: Dictionary) -> bool:
 	
 	# Check walk_to actions
 	if action_type == "walk_to":
-		var target = action.get("target", "")
+		var target = action.get("target", "").strip_edges()
 		
-		# Don't walk to current room
-		if target.to_lower() == current_room.to_lower():
+		# Block invalid targets like "Player" - NPCs can't walk TO a player
+		if target.to_lower() == "player":
+			print("[", npc_name, "] 🚫 Blocked walk_to 'Player' - use look_at instead")
+			return false
+		
+		# Get available rooms first
+		var available_rooms = RoomManager.get_available_room_names()
+		
+		# If no rooms are defined in the scene, block ALL walk_to commands
+		if available_rooms.size() == 0:
+			print("[", npc_name, "] 🚫 Blocked walk_to '", target, "' - no Room nodes defined in scene!")
+			print("[", npc_name, "] 💡 Hint: Add Room (Area3D) nodes to the scene and add them to the 'rooms' group")
+			return false
+		
+		# Don't walk to current room (fuzzy match)
+		if target.to_lower() == current_room.to_lower() or current_room.to_lower().begins_with(target.to_lower()):
 			print("[", npc_name, "] 🚫 Blocked walk_to current room: ", target)
 			return false
 		
-		# Check if target is a valid room
-		var available_rooms = RoomManager.get_available_room_names()
+		# Check if target is a valid room (with fuzzy matching)
 		var target_valid = false
+		var target_lower = target.to_lower()
 		for room in available_rooms:
-			if room.to_lower() == target.to_lower():
+			var room_lower = room.to_lower()
+			# Exact match or partial match (e.g., "Storage" matches "Storage Room")
+			if room_lower == target_lower or room_lower.begins_with(target_lower) or target_lower in room_lower:
 				target_valid = true
 				break
 		
-		if not target_valid and target.to_lower() != "player":
-			print("[", npc_name, "] 🚫 Unknown room target: ", target, " (available: ", available_rooms, ")")
+		if not target_valid:
+			print("[", npc_name, "] 🚫 Unknown room target: '", target, "' (available: ", available_rooms, ")")
 			return false
 	
 	return true
@@ -977,7 +1050,12 @@ func _initialize_emotions():
 		"flirty": flirty,
 		"tired": tired,
 		"trust": trust,
-		"hostility": hostility
+		"hostility": hostility,
+		# Voice style emotions (no Inspector export, always start at 0)
+		"shouting": 0,
+		"whispering": 0,
+		"hopeful": 0,
+		"excited": 0
 	}
 	current_emotions = baseline_emotions.duplicate()
 	print("[", npc_name, "] Emotions initialized: ", _get_dominant_emotions())
@@ -1121,18 +1199,7 @@ func get_mood_description() -> String:
 # ============ VOICE SETUP ============
 
 func _setup_voice():
-	kokoro_tts = KokoroTTS.new()
-	add_child(kokoro_tts)
-	
-	# Configure voice
-	kokoro_tts.voice_id = VOICE_PRESET_IDS.get(voice_preset, 0)
-	kokoro_tts.speed = voice_speed
-	
-	# Connect signals
-	kokoro_tts.synthesis_completed.connect(_on_voice_ready)
-	kokoro_tts.synthesis_failed.connect(_on_voice_failed)
-	
-	# Use existing AudioStreamPlayer3D or create new one
+	# Setup audio player first (shared by both TTS providers)
 	voice_player = get_node_or_null("AudioStreamPlayer3D")
 	if not voice_player:
 		voice_player = AudioStreamPlayer3D.new()
@@ -1148,8 +1215,51 @@ func _setup_voice():
 	if not voice_player.finished.is_connected(_on_voice_done):
 		voice_player.finished.connect(_on_voice_done)
 	
+	# Setup TTS provider based on selection
+	match tts_provider:
+		TTSProvider.AZURE:
+			_setup_azure_tts()
+		TTSProvider.LOCAL_KOKORO, _:
+			_setup_kokoro_tts()
+
+
+func _setup_kokoro_tts():
+	"""Setup local Kokoro TTS."""
+	kokoro_tts = KokoroTTS.new()
+	add_child(kokoro_tts)
+	
+	# Configure voice
+	kokoro_tts.voice_id = VOICE_PRESET_IDS.get(voice_preset, 0)
+	kokoro_tts.speed = voice_speed
+	
+	# Connect signals
+	kokoro_tts.synthesis_completed.connect(_on_voice_ready)
+	kokoro_tts.synthesis_failed.connect(_on_voice_failed)
+	
 	if kokoro_tts.is_available():
-		print("[", npc_name, "] Voice: ", kokoro_tts.get_voice_description(kokoro_tts.voice_id))
+		print("[", npc_name, "] Voice (Kokoro): ", kokoro_tts.get_voice_description(kokoro_tts.voice_id))
+	else:
+		print("[", npc_name, "] Warning: Kokoro TTS not available")
+
+
+func _setup_azure_tts():
+	"""Setup Azure cloud TTS with expressive voices."""
+	azure_tts = AzureTTS.new()
+	add_child(azure_tts)
+	
+	# Configure voice
+	var voice_name = AZURE_VOICE_NAMES.get(azure_voice, "en-US-GuyNeural")
+	azure_tts.set_voice(voice_name)
+	azure_tts.set_rate(voice_speed)
+	
+	# Connect signals
+	azure_tts.synthesis_completed.connect(_on_voice_ready)
+	azure_tts.synthesis_failed.connect(_on_voice_failed)
+	
+	if azure_tts.is_available():
+		print("[", npc_name, "] Voice (Azure): ", azure_tts.get_voice_description(voice_name))
+	else:
+		print("[", npc_name, "] Warning: Azure TTS not configured - set API key in AI Settings")
 
 
 func _get_mood_adjusted_speed() -> float:
@@ -1387,6 +1497,7 @@ Your current emotions: {emotion_desc}
 
 IMPORTANT: Express emotions using tags! Format: [emotion_name:intensity] where intensity is 0-100
 Available emotions: happy, angry, sad, fearful, disgusted, surprised, flirty, tired, trust
+Voice style tags: shouting, whispering, hopeful, excited (for HOW you speak)
 
 USE EMOTION TAGS in your responses! Examples:
 - Happy response: "That's wonderful! [happy:80]"
@@ -1395,6 +1506,10 @@ USE EMOTION TAGS in your responses! Examples:
 - Flirty: "Well aren't you charming? [flirty:60] [happy:30]"
 - Tired: "*yawn* ...what? [tired:70]"
 - Trust: "I'm glad we're talking. [trust:65] [happy:40]"
+- SHOUTING: "HEY! GET BACK HERE! [shouting:90] [angry:80]"
+- Whispering: "Psst... come closer... [whispering:80]"
+- Hopeful: "Maybe things will work out! [hopeful:70] [happy:50]"
+- Excited: "OH WOW! This is amazing! [excited:90] [happy:85]"
 
 Examples:
 Player: "Your shop is garbage!"
@@ -1402,6 +1517,12 @@ You: "Excuse me?! Get out! [angry:85] [disgusted:60] [trust:-20]"
 
 Player: "You're amazing!"
 You: "Aw, thank you! [happy:80] [flirty:40] [trust:70]"
+
+Player: "HELP! SOMEONE'S CHASING ME!"
+You: "QUICK! HIDE BEHIND THE COUNTER! [shouting:85] [fearful:60]"
+
+Player: "I have a secret to tell you..."
+You: "Oh? Tell me... I won't say a word... [whispering:70] [flirty:40]"
 {spontaneous_hint}
 """
 
@@ -1777,7 +1898,7 @@ func _process_response(full_response: String):
 # ============ VOICE SYNTHESIS ============
 
 func _speak(text: String):
-	if not enable_voice or not kokoro_tts:
+	if not enable_voice:
 		return
 	
 	if text.begins_with("[Error"):
@@ -1786,7 +1907,19 @@ func _speak(text: String):
 	if text.strip_edges().is_empty():
 		return
 	
-	if not kokoro_tts.is_available():
+	# Check which TTS is available based on provider
+	var tts_available = false
+	var tts_busy = false
+	
+	match tts_provider:
+		TTSProvider.AZURE:
+			tts_available = azure_tts and azure_tts.is_available()
+			tts_busy = azure_tts and azure_tts.is_busy()
+		TTSProvider.LOCAL_KOKORO, _:
+			tts_available = kokoro_tts and kokoro_tts.is_available()
+			tts_busy = kokoro_tts and kokoro_tts.is_busy()
+	
+	if not tts_available:
 		return
 	
 	# Stop previous voice only when NEW audio is ready to play
@@ -1795,17 +1928,40 @@ func _speak(text: String):
 		is_speaking = false
 		print("[", npc_name, "] Interrupted previous speech - new audio ready")
 	
-	if kokoro_tts.is_busy():
+	if tts_busy:
 		return
 	
-	# Apply voice settings
+	# Synthesize with the appropriate provider
+	match tts_provider:
+		TTSProvider.AZURE:
+			_speak_azure(text)
+		TTSProvider.LOCAL_KOKORO, _:
+			_speak_kokoro(text)
+
+
+func _speak_kokoro(text: String):
+	"""Synthesize with local Kokoro TTS."""
 	kokoro_tts.voice_id = VOICE_PRESET_IDS.get(voice_preset, 0)
 	kokoro_tts.speed = _get_mood_adjusted_speed()
 	
 	# Add mood markers to text
 	var tts_text = _add_mood_markers(text)
-	
 	kokoro_tts.synthesize(tts_text)
+
+
+func _speak_azure(text: String):
+	"""Synthesize with Azure TTS using emotion styles."""
+	var voice_name = AZURE_VOICE_NAMES.get(azure_voice, "en-US-GuyNeural")
+	azure_tts.set_voice(voice_name)
+	azure_tts.set_rate(_get_mood_adjusted_speed())
+	
+	# Apply emotion styles if enabled
+	if use_azure_emotion_styles and mood_affects_voice:
+		azure_tts.set_style_from_emotions(current_emotions)
+	else:
+		azure_tts.voice_style = ""
+	
+	azure_tts.synthesize(text)
 
 
 func _on_voice_ready(audio: AudioStreamWAV):

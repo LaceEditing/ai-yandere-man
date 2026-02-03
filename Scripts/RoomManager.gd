@@ -117,13 +117,30 @@ func get_npc_location_description(npc_name: String) -> String:
 # ============ Debug Info ============
 
 func get_room_node(room_display_name: String) -> Node3D:
-	"""Find a room node by its display name (the room_name property)."""
+	"""Find a room node by its display name (the room_name property).
+	   Supports fuzzy matching - will match partial names like 'Storage' -> 'Storage Room'."""
 	# Get all Room nodes in the scene tree
 	var all_rooms = get_tree().get_nodes_in_group("rooms")
+	var search_name = room_display_name.to_lower().strip_edges()
 	
+	# First try exact match (case-insensitive)
 	for room in all_rooms:
-		if room is Room and room.get_room_name() == room_display_name:
+		if room is Room and room.get_room_name().to_lower() == search_name:
 			return room
+	
+	# Try partial match - if search term is contained in room name
+	# e.g., "Storage" matches "Storage Room", "Kitchen" matches "Kitchen"
+	for room in all_rooms:
+		if room is Room:
+			var room_name_lower = room.get_room_name().to_lower()
+			# Check if search term is at the start of room name (e.g., "storage" in "storage room")
+			if room_name_lower.begins_with(search_name):
+				print("[RoomManager] 🔄 Fuzzy matched '", room_display_name, "' -> '", room.get_room_name(), "'")
+				return room
+			# Check if room name starts with search term
+			if search_name in room_name_lower:
+				print("[RoomManager] 🔄 Fuzzy matched '", room_display_name, "' -> '", room.get_room_name(), "'")
+				return room
 	
 	# Not found - print debug info
 	print("[RoomManager] ⚠️ Could not find room: '", room_display_name, "'")

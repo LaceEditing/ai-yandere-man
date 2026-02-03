@@ -105,12 +105,36 @@ adjust_emotion("angry", 20)  # Relative adjustment
 _get_dominant_emotions(20)  # Get emotions above threshold
 ```
 
-### TTS Integration (KokoroTTS)
-Located at [Scripts/Kokorotts.gd](Scripts/Kokorotts.gd):
+### TTS Integration
+NPCs support two TTS providers, selectable per-NPC via `tts_provider` export:
+
+**Kokoro TTS (Local)** - [Scripts/Kokorotts.gd](Scripts/Kokorotts.gd):
 - Auto-detects bundled `sherpa-onnx-cli.exe` and model files relative to game executable
 - 11 English voices (AM_ADAM, AF_SARAH, etc.) + 53 multilingual voices
 - Emotion intensities affect voice speed (happy/angry/fearful = faster, sad/tired = slower)
 - Synthesizes to AudioStreamWAV via threaded subprocess calls
+- Free, offline, no API key required
+
+**Azure TTS (Cloud)** - [Scripts/AzureTTS.gd](Scripts/AzureTTS.gd):
+- High-quality neural voices with built-in emotion styles
+- Expressive voices: Jenny, Aria, Sara (female), Guy, Davis, Tony, Jason (male)
+- Emotion styles: cheerful, angry, sad, terrified, friendly, shouting, whispering, hopeful
+- Auto-maps NPC emotions to Azure voice styles with intensity (0.5-2.0 degree)
+- Requires Azure Cognitive Services Speech API key (configured in AI Settings menu)
+- SSML-based synthesis with prosody control
+
+**TTS Provider Switching:**
+```gdscript
+# In Inspector: Set NPC's tts_provider export
+# TTSProvider.LOCAL_KOKORO - Uses local Kokoro
+# TTSProvider.AZURE - Uses Azure cloud TTS
+
+# Emotion → Azure style mapping:
+# happy → cheerful, angry → angry, sad → sad
+# fearful → terrified, disgusted → unfriendly
+# surprised → excited, flirty → friendly
+# hostility → shouting, trust → friendly
+```
 
 ### Action System Workflow
 1. LLM generates response with embedded tags: `"Sure! [animate:sit] Let me sit down."`

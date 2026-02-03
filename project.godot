@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="MaleYanderAI"
-run/main_scene="uid://cyg2iqwc2h326"
+run/main_scene="uid://j0kxxr3tjlmp"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 

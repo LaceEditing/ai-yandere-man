@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-## AI Settings Menu - Configure provider, API keys, and voice input
+## AI Settings Menu - Configure provider, API keys, and voice input/output
 
 # UI References
 @onready var panel = $PanelContainer
@@ -18,6 +18,13 @@ extends CanvasLayer
 @onready var show_key_button = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection/ShowKeyButton
 @onready var model_info_label = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/GroqSection/ModelInfoLabel
 
+# Azure TTS section
+@onready var azure_tts_section = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection
+@onready var azure_api_key_input = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection/AzureAPIKeyInput
+@onready var azure_region_input = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection/AzureRegionInput
+@onready var show_azure_key_button = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection/ShowAzureKeyButton
+@onready var azure_status_label = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection/AzureStatusLabel
+
 # Voice input section
 @onready var voice_section = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/VoiceSection
 @onready var voice_status_label = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/VoiceSection/VoiceStatusLabel
@@ -27,6 +34,7 @@ extends CanvasLayer
 @onready var close_button = $PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/ButtonContainer/CloseButton
 
 var is_key_visible: bool = false
+var is_azure_key_visible: bool = false
 
 # Store model IDs in order
 var model_ids: Array = []
@@ -45,6 +53,7 @@ func _ready():
 	# Connect signals
 	provider_option.item_selected.connect(_on_provider_selected)
 	show_key_button.toggled.connect(_on_show_key_toggled)
+	show_azure_key_button.toggled.connect(_on_show_azure_key_toggled)
 	groq_model_option.item_selected.connect(_on_model_selected)
 	apply_button.pressed.connect(_on_apply_pressed)
 	close_button.pressed.connect(_on_close_pressed)
@@ -95,8 +104,46 @@ func _load_current_settings():
 	api_key_input.text = AIManager.get_groq_api_key()
 	_select_groq_model(AIManager.get_groq_model())
 	
+	# Load Azure TTS settings
+	_load_azure_settings()
+	
 	# Update status
 	_update_status()
+
+
+func _load_azure_settings():
+	"""Load Azure TTS settings from config file."""
+	var config = ConfigFile.new()
+	var err = config.load("user://ai_settings.cfg")
+	if err == OK:
+		azure_api_key_input.text = config.get_value("tts", "azure_api_key", "")
+		azure_region_input.text = config.get_value("tts", "azure_region", "eastus")
+	_update_azure_status()
+
+
+func _save_azure_settings():
+	"""Save Azure TTS settings to config file."""
+	var config = ConfigFile.new()
+	config.load("user://ai_settings.cfg")  # Load existing settings
+	config.set_value("tts", "azure_api_key", azure_api_key_input.text.strip_edges())
+	config.set_value("tts", "azure_region", azure_region_input.text.strip_edges())
+	config.save("user://ai_settings.cfg")
+
+
+func _update_azure_status():
+	"""Update Azure TTS status label."""
+	var api_key = azure_api_key_input.text.strip_edges()
+	var region = azure_region_input.text.strip_edges()
+	
+	if api_key.is_empty():
+		azure_status_label.text = "Status: Not configured (no API key)"
+		azure_status_label.add_theme_color_override("font_color", Color.YELLOW)
+	elif region.is_empty():
+		azure_status_label.text = "Status: Not configured (no region)"
+		azure_status_label.add_theme_color_override("font_color", Color.YELLOW)
+	else:
+		azure_status_label.text = "Status: Ready (region: " + region + ")"
+		azure_status_label.add_theme_color_override("font_color", Color.GREEN)
 
 func _select_groq_model(model_id: String):
 	for i in range(groq_model_option.item_count):
@@ -173,6 +220,12 @@ func _on_show_key_toggled(toggled: bool):
 	api_key_input.secret = not toggled
 	show_key_button.text = "Hide" if toggled else "Show"
 
+
+func _on_show_azure_key_toggled(toggled: bool):
+	is_azure_key_visible = toggled
+	azure_api_key_input.secret = not toggled
+	show_azure_key_button.text = "Hide" if toggled else "Show"
+
 func _on_apply_pressed():
 	# Get selected provider
 	var provider = provider_option.get_item_id(provider_option.selected)
@@ -184,6 +237,10 @@ func _on_apply_pressed():
 	if provider == AIManager.Provider.GROQ:
 		AIManager.set_groq_api_key(api_key_input.text.strip_edges())
 		AIManager.set_groq_model(_get_selected_groq_model())
+	
+	# Always save Azure TTS settings (independent of AI provider)
+	_save_azure_settings()
+	_update_azure_status()
 	
 	# Update status display
 	_update_status()

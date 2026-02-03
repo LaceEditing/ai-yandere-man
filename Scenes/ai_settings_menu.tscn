@@ -141,6 +141,57 @@ autowrap_mode = 2
 [node name="HSeparator3" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=1844974331]
 layout_mode = 2
 
+[node name="AzureTTSSection" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="AzureTitle" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Azure TTS (Voice Output)"
+
+[node name="AzureAPIKeyLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+layout_mode = 2
+text = "Azure Speech API Key:"
+
+[node name="AzureAPIKeyInput" type="LineEdit" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Enter your Azure Speech API key..."
+secret = true
+
+[node name="ShowAzureKeyButton" type="Button" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+layout_mode = 2
+toggle_mode = true
+text = "Show"
+
+[node name="AzureRegionLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+layout_mode = 2
+text = "Azure Region:"
+
+[node name="AzureRegionInput" type="LineEdit" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "eastus"
+placeholder_text = "e.g., eastus, westus2, westeurope..."
+
+[node name="AzureStatusLabel" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+layout_mode = 2
+text = "Status: Not configured"
+
+[node name="AzureNote" type="Label" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer/AzureTTSSection"]
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "Azure TTS provides high-quality neural voices with emotion styles.
+Get your key at portal.azure.com → Speech Services.
+Set NPC's TTS Provider to 'Azure' in the Inspector."
+autowrap_mode = 2
+
+[node name="HSeparator5" type="HSeparator" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
 [node name="VoiceSection" type="VBoxContainer" parent="PanelContainer/ScrollContainer/MarginContainer/VBoxContainer" unique_id=1803855885]
 layout_mode = 2
 theme_override_constants/separation = 8

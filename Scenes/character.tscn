@@ -12,15 +12,19 @@ transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0, 0, 0)
 script = ExtResource("1_lkv7d")
 
 [node name="Head" type="Node3D" parent="." unique_id=1798829846]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.839385, -1.5300136)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4.839385, -0.12577167)
 
 [node name="Camera3D" type="Camera3D" parent="Head" unique_id=694857952]
+transform = Transform3D(1.5384616, 0, 0, 0, 1.5384616, 0, 0, 0, 1.5384616, 0, 0, -0.42376614)
+cull_mask = 1048573
+fov = 85.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2131141174]
 transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 3, 0)
 shape = SubResource("CapsuleShape3D_he2x2")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=523749936]
-transform = Transform3D(3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 3, 0)
+transform = Transform3D(1.1221197, 0, 0, 0, 1.7976924, 0, 0, 0, 1.1221197, 0, 1.8069508, 0)
+layers = 2
 mesh = SubResource("CapsuleMesh_lkv7d")
 surface_material_override/0 = ExtResource("2_ushfy")

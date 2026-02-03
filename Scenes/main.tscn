@@ -1,30 +1,52 @@
-[gd_scene format=3 uid="uid://cyg2iqwc2h326"]
+[gd_scene format=3 uid="uid://j0kxxr3tjlmp"]
 
-[ext_resource type="PackedScene" uid="uid://bumo05wek6sx3" path="res://Scenes/character.tscn" id="1_jjgbg"]
-[ext_resource type="PackedScene" uid="uid://bs2jm62cmkbrk" path="res://addons/instant-realistic-light/light_scene.tscn" id="2_bo1nx"]
-[ext_resource type="PackedScene" uid="uid://5j3g3jx65e7m" path="res://Scenes/npc_base.tscn" id="3_8gbba"]
+[ext_resource type="PackedScene" uid="uid://bumo05wek6sx3" path="res://Scenes/character.tscn" id="1_jw32o"]
+[ext_resource type="PackedScene" uid="uid://bs2jm62cmkbrk" path="res://addons/instant-realistic-light/light_scene.tscn" id="2_50glp"]
+[ext_resource type="Texture2D" uid="uid://dhgi5i3owk7ld" path="res://Textures/HDRIs/kloofendal_48d_partly_cloudy_puresky_4k.exr" id="3_vy5pj"]
+[ext_resource type="PackedScene" uid="uid://5j3g3jx65e7m" path="res://Scenes/npc_base.tscn" id="4_bmxlf"]
+[ext_resource type="Material" uid="uid://ddwbnov6murb2" path="res://Materials/ShaderMats/OutlineShader.tres" id="5_4kpch"]
+[ext_resource type="Shader" uid="uid://c3x7twt1tsa5d" path="res://Shaders/cel/cel-shader-base.gdshader" id="6_grg3l"]
+[ext_resource type="Script" uid="uid://d1chj566hlcd" path="res://Scripts/Room.gd" id="7_frkhe"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bo1nx"]
-albedo_color = Color(0.28580943, 0.21625122, 0.3295984, 1)
+[sub_resource type="Shader" id="Shader_7fwq4"]
+code = "
+// NOTE: Shader automatically converted from Godot Engine 4.6.stable's PanoramaSkyMaterial.
 
-[sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_gn88m"]
-ground_color = Color(0, 0, 0, 1)
+shader_type sky;
+
+uniform sampler2D source_panorama : filter_linear, source_color, hint_default_black;
+uniform float exposure : hint_range(0, 128) = 1.0;
+uniform float speed = 0.002;
+
+void sky() {
+	vec2 skyCoords = vec2(SKY_COORDS.x + TIME * speed, SKY_COORDS.y);
+	
+	COLOR = texture(source_panorama, skyCoords).rgb * exposure;
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_f36oo"]
+shader = SubResource("Shader_7fwq4")
+shader_parameter/source_panorama = ExtResource("3_vy5pj")
+shader_parameter/exposure = 1.0
+shader_parameter/speed = 0.001
 
 [sub_resource type="Sky" id="Sky_tyhie"]
-sky_material = SubResource("PhysicalSkyMaterial_gn88m")
+sky_material = SubResource("ShaderMaterial_f36oo")
 radiance_size = 2
 
 [sub_resource type="Environment" id="Environment_f8w8m"]
 background_mode = 2
 background_intensity = 100000.0
 sky = SubResource("Sky_tyhie")
-tonemap_mode = 3
-tonemap_white = 8.0
+ambient_light_source = 3
+reflected_light_source = 2
+tonemap_mode = 4
+ssr_enabled = true
 ssao_enabled = true
 ssao_detail = 2.0
 sdfgi_enabled = true
 sdfgi_bounce_feedback = 0.9
-glow_enabled = true
 glow_normalized = true
 glow_bloom = 0.2
 volumetric_fog_enabled = true
@@ -42,43 +64,973 @@ dof_blur_far_distance = 1.44
 dof_blur_near_distance = 0.01
 auto_exposure_min_sensitivity = 8.01
 
-[sub_resource type="Compositor" id="Compositor_8gbba"]
-resource_local_to_scene = true
+[sub_resource type="Compositor" id="Compositor_l3p17"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kry3j"]
-albedo_color = Color(0.6036, 0.47919852, 0, 1)
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_d5bq8"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.99999994, 0.70344526, 0.34826308, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
 
-[node name="Main" type="Node3D" unique_id=1446083720]
+[sub_resource type="NavigationMesh" id="NavigationMesh_f36oo"]
+vertices = PackedVector3Array(2.036602, 0.44395018, 29.461601, -1.963398, 0.44395018, 24.711601, -2.213398, 0.44395018, 29.461601, -1.963398, 0.44395018, 34.2116, -0.713398, 0.44395018, 34.4616, 0.536602, 0.44395018, 34.4616, 1.786602, 0.44395018, 34.2116, -17.963398, 0.44395018, 24.461601, 1.786602, 0.44395018, 11.211601, -1.213398, 0.44395018, -4.0383987, -17.963398, 0.44395018, -3.7883987, -7.963398, 0.44395018, 34.2116, -3.463398, 0.44395018, 34.2116, -3.463398, 0.44395018, 29.711601, -7.963398, 0.44395018, 27.711601, 3.536602, 0.44395018, 29.711601, 3.286602, 0.44395018, 27.961601, 1.786602, 0.44395018, 27.711601, -2.213398, 0.44395018, 27.961601, 0.536602, 0.44395018, 35.4616, -0.963398, 0.44395018, 35.7116, 3.286602, 0.44395018, 22.711601, 3.536602, 0.44395018, 23.461601, 11.786602, 0.44395018, 23.461601, 3.536602, 0.44395018, 21.211601, -11.713398, -3.35605, -21.038399, -3.213398, -3.35605, -21.038399, -2.963398, -3.35605, -23.038399, -3.213398, -3.35605, -24.788399, -11.713398, -3.35605, -39.0384, -3.213398, -3.35605, -39.0384, -3.213398, -3.35605, -43.5384, 3.536602, 0.44395018, 41.4616, 15.786602, 0.44395018, 41.4616, 15.786602, 0.44395018, 26.711601, -2.963398, -3.35605, -45.0384, -3.213398, -3.35605, -49.7884, -11.713398, -3.35605, -49.7884, -1.213398, -3.35605, -22.788399, 1.036602, 0.44395018, -5.0383987, 1.786602, -3.35605, -22.788399, -1.213398, -3.1560497, -15.5768585, -1.213398, -0.15604973, -6.923012, 1.536602, -3.35605, -16.871735, 2.036602, -3.35605, -24.538399, -1.213398, -3.35605, -24.788399, -1.213398, -3.35605, -43.5384, 1.786602, -3.35605, -45.5384, 3.286602, -3.35605, -23.038399, 3.536602, -3.35605, -22.038399, 17.786602, -3.35605, -22.038399, 3.536602, -3.35605, -24.788399, -3.213398, -3.35605, -31.788399, -11.713398, -3.35605, -31.788399, 1.786602, 0.44395018, -5.2883987, 1.786602, -2.15605, -12.580067, 1.786602, -3.35605, -16.955067, 17.786602, -3.35605, -40.7884, 3.536602, -3.35605, -40.7884, 1.786602, 0.44395018, 46.4616, 1.786602, 0.44395018, 35.7116, 11.786602, 0.44395018, 12.711601, 3.536602, 0.44395018, 12.711601, 1.286602, 0.44395018, -3.7883987, 2.036602, 0.44395018, 21.461601, 2.036602, 0.44395018, 22.711601, 15.786602, 0.44395018, 10.961601, 15.786602, 0.44395018, -3.7883987, 3.536602, 0.44395018, 26.711601, -7.963398, 0.44395018, 35.7116, -7.963398, 0.44395018, 46.4616, -12.463398, 7.24395, -38.0384, -12.463398, 7.24395, -32.7884, -2.213398, 7.24395, -32.5384, -2.213398, 7.24395, -38.2884, -14.213398, -3.35605, -32.0384, -14.213398, -3.35605, -20.788399, -13.463398, -3.35605, -20.788399, -13.463398, -3.35605, -32.0384, -18.213398, 0.44395018, -9.538399, -18.213398, 0.44395018, -5.2883987, -3.213398, 0.44395018, -5.2883987, -3.213398, 0.44395018, -9.538399, 2.786602, 7.24395, 24.461601, 2.786602, 7.24395, 25.711601, 16.286602, 7.24395, 25.711601, 16.286602, 7.24395, 24.461601, -9.213398, 7.24395, 47.7116, 2.286602, 7.24395, 47.7116, -8.963398, 7.24395, 47.2116, -8.963398, 7.24395, 26.961601, -2.963398, 7.24395, 26.711601, -2.963398, 7.24395, 25.461601, -18.213398, 7.24395, 25.461601, -18.213398, 7.24395, 26.711601, -9.213398, 7.24395, 26.961601, 2.786602, 7.24395, 42.4616, 2.786602, 7.24395, 47.2116, 3.286602, 7.24395, 42.7116, 16.286602, 7.24395, 42.7116)
+polygons = [PackedInt32Array(4, 3, 5), PackedInt32Array(5, 3, 6), PackedInt32Array(6, 3, 2), PackedInt32Array(6, 2, 0), PackedInt32Array(0, 2, 1), PackedInt32Array(1, 7, 8), PackedInt32Array(8, 7, 9), PackedInt32Array(9, 7, 10), PackedInt32Array(12, 11, 13), PackedInt32Array(13, 11, 14), PackedInt32Array(17, 16, 15), PackedInt32Array(2, 13, 18), PackedInt32Array(18, 13, 14), PackedInt32Array(5, 19, 4), PackedInt32Array(4, 19, 20), PackedInt32Array(2, 18, 1), PackedInt32Array(21, 24, 22), PackedInt32Array(22, 24, 23), PackedInt32Array(27, 26, 28), PackedInt32Array(28, 26, 25), PackedInt32Array(31, 30, 29), PackedInt32Array(32, 15, 33), PackedInt32Array(33, 15, 34), PackedInt32Array(35, 31, 36), PackedInt32Array(36, 31, 37), PackedInt32Array(37, 31, 29), PackedInt32Array(9, 42, 39), PackedInt32Array(39, 42, 41), PackedInt32Array(39, 41, 43), PackedInt32Array(43, 41, 40), PackedInt32Array(40, 41, 38), PackedInt32Array(28, 45, 27), PackedInt32Array(27, 45, 38), PackedInt32Array(38, 45, 44), PackedInt32Array(31, 35, 46), PackedInt32Array(46, 35, 47), PackedInt32Array(48, 51, 49), PackedInt32Array(49, 51, 50), PackedInt32Array(52, 28, 53), PackedInt32Array(53, 28, 25), PackedInt32Array(51, 48, 44), PackedInt32Array(44, 48, 40), PackedInt32Array(44, 40, 38), PackedInt32Array(40, 56, 43), PackedInt32Array(43, 56, 55), PackedInt32Array(43, 55, 54), PackedInt32Array(43, 54, 39), PackedInt32Array(58, 57, 51), PackedInt32Array(51, 57, 50), PackedInt32Array(45, 46, 44), PackedInt32Array(44, 46, 47), PackedInt32Array(19, 60, 20), PackedInt32Array(20, 60, 59), PackedInt32Array(62, 61, 24), PackedInt32Array(24, 61, 23), PackedInt32Array(39, 63, 9), PackedInt32Array(9, 63, 8), PackedInt32Array(15, 0, 17), PackedInt32Array(17, 0, 1), PackedInt32Array(65, 64, 21), PackedInt32Array(21, 64, 24), PackedInt32Array(66, 8, 67), PackedInt32Array(67, 8, 63), PackedInt32Array(65, 17, 64), PackedInt32Array(64, 17, 1), PackedInt32Array(64, 1, 8), PackedInt32Array(16, 68, 15), PackedInt32Array(15, 68, 34), PackedInt32Array(69, 20, 70), PackedInt32Array(70, 20, 59), PackedInt32Array(71, 74, 72), PackedInt32Array(72, 74, 73), PackedInt32Array(78, 77, 75), PackedInt32Array(75, 77, 76), PackedInt32Array(82, 81, 79), PackedInt32Array(79, 81, 80), PackedInt32Array(86, 85, 83), PackedInt32Array(83, 85, 84), PackedInt32Array(89, 88, 87), PackedInt32Array(90, 95, 91), PackedInt32Array(91, 95, 92), PackedInt32Array(92, 95, 94), PackedInt32Array(92, 94, 93), PackedInt32Array(90, 89, 95), PackedInt32Array(95, 89, 87), PackedInt32Array(98, 97, 96), PackedInt32Array(99, 98, 96)]
+sample_partition_type = 2
+cell_height = 0.2
+agent_height = 2.0
+vertices_per_polygon = 7.0
 
-[node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=1836521266]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.3190002, -0.3383789, -6.600464)
-use_collision = true
-size = Vector3(13.02887, 0.3232422, 20)
-material = SubResource("StandardMaterial3D_bo1nx")
+[sub_resource type="BoxShape3D" id="BoxShape3D_living_trigger"]
+size = Vector3(16, 4, 20)
 
-[node name="Character" parent="." unique_id=864869144 instance=ExtResource("1_jjgbg")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.77554774, 0)
-walk_speed = null
-sprint_speed = null
-jump_velocity = null
-mouse_sensitivity = null
+[sub_resource type="StandardMaterial3D" id="Material_living"]
+albedo_color = Color(0.4, 0.3, 0.3, 1)
 
-[node name="WorldEnvironment" parent="." unique_id=393079250 instance=ExtResource("2_bo1nx")]
+[sub_resource type="BoxMesh" id="BoxMesh_living_floor"]
+material = SubResource("Material_living")
+size = Vector3(16, 0.2, 20)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ax78n"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.41996887, 0.32635537, 0, 1)
+shader_parameter/specular = Color(0.012617188, 0.012617188, 0.012617188, 0)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_living_floor"]
+size = Vector3(16, 0.2, 20)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_kitchen_trigger"]
+size = Vector3(14, 4, 16)
+
+[sub_resource type="StandardMaterial3D" id="Material_kitchen"]
+albedo_color = Color(0.5, 0.5, 0.4, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_kitchen_floor"]
+material = SubResource("Material_kitchen")
+size = Vector3(14, 0.2, 16)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_j7ulc"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.19139826, 0.39865893, 0, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_kitchen_floor"]
+size = Vector3(14, 0.2, 16)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bedroom_trigger"]
+size = Vector3(14, 4, 16)
+
+[sub_resource type="StandardMaterial3D" id="Material_bedroom"]
+albedo_color = Color(0.4, 0.35, 0.45, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_bedroom_floor"]
+material = SubResource("Material_bedroom")
+size = Vector3(14, 0.2, 16)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_v6w0w"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.5702878, 0.19233957, 0.14391711, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bedroom_floor"]
+size = Vector3(14, 0.2, 16)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bathroom_trigger"]
+size = Vector3(6, 4, 8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_bathroom_floor"]
+size = Vector3(6, 0.2, 8)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_snspp"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.20507449, 0.34878975, 0.48625273, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bathroom_floor"]
+size = Vector3(6, 0.2, 8)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hallway_trigger"]
+size = Vector3(5, 4, 40)
+
+[sub_resource type="StandardMaterial3D" id="Material_hallway"]
+albedo_color = Color(0.35, 0.35, 0.35, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hallway_floor"]
+material = SubResource("Material_hallway")
+size = Vector3(5, 0.2, 40)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5pcn1"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.4302716, 0.2626345, 0.46383417, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hallway_floor"]
+size = Vector3(5, 0.2, 40)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_dining_trigger"]
+size = Vector3(15.60437, 4, 14.998291)
+
+[sub_resource type="StandardMaterial3D" id="Material_dining"]
+albedo_color = Color(0.45, 0.4, 0.35, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_dining_floor"]
+material = SubResource("Material_dining")
+size = Vector3(12, 0.2, 14)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dining"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.45, 0.35, 0.25, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_dining_floor"]
+size = Vector3(16.065277, 0.2, 15.184937)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_guestbed_trigger"]
+size = Vector3(12, 4, 14)
+
+[sub_resource type="StandardMaterial3D" id="Material_guestbed"]
+albedo_color = Color(0.35, 0.4, 0.45, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_guestbed_floor"]
+material = SubResource("Material_guestbed")
+size = Vector3(12, 0.2, 14)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_guestbed"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.35, 0.4, 0.45, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_guestbed_floor"]
+size = Vector3(12, 0.2, 14)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_office_trigger"]
+size = Vector3(10, 4, 12)
+
+[sub_resource type="StandardMaterial3D" id="Material_office"]
+albedo_color = Color(0.3, 0.35, 0.3, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_office_floor"]
+material = SubResource("Material_office")
+size = Vector3(10, 0.2, 12)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_office"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.3, 0.35, 0.3, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_office_floor"]
+size = Vector3(10, 0.2, 12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_recreation_trigger"]
+size = Vector3(16, 4, 20)
+
+[sub_resource type="StandardMaterial3D" id="Material_recreation"]
+albedo_color = Color(0.25, 0.25, 0.3, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_recreation_floor"]
+material = SubResource("Material_recreation")
+size = Vector3(16, 0.2, 20)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_recreation"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.25, 0.25, 0.3, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_recreation_floor"]
+size = Vector3(16, 0.2, 20)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_laundry_trigger"]
+size = Vector3(10, 4, 12)
+
+[sub_resource type="StandardMaterial3D" id="Material_laundry"]
+albedo_color = Color(0.4, 0.4, 0.45, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_laundry_floor"]
+material = SubResource("Material_laundry")
+size = Vector3(10, 0.2, 12)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_laundry"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.4, 0.4, 0.45, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_laundry_floor"]
+size = Vector3(10, 0.2, 12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_storage_trigger"]
+size = Vector3(12, 4, 12)
+
+[sub_resource type="StandardMaterial3D" id="Material_storage"]
+albedo_color = Color(0.3, 0.3, 0.3, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_storage_floor"]
+material = SubResource("Material_storage")
+size = Vector3(12, 0.2, 12)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_storage"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.3, 0.3, 0.3, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_storage_floor"]
+size = Vector3(12, 0.2, 12)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_basement_hallway_trigger"]
+size = Vector3(5, 4, 30)
+
+[sub_resource type="StandardMaterial3D" id="Material_basement_hallway"]
+albedo_color = Color(0.25, 0.25, 0.25, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_basement_hallway_floor"]
+material = SubResource("Material_basement_hallway")
+size = Vector3(5, 0.2, 30)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_basement_hallway"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.25, 0.25, 0.25, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_basement_hallway_floor"]
+size = Vector3(5, 0.2, 30)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_stairs_trigger"]
+size = Vector3(5, 6, 12)
+
+[sub_resource type="StandardMaterial3D" id="Material_stairs"]
+albedo_color = Color(0.4, 0.35, 0.3, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_stairs_ramp"]
+material = SubResource("Material_stairs")
+size = Vector3(5, 0.3, 12)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_stairs"]
+render_priority = 0
+next_pass = ExtResource("5_4kpch")
+shader = ExtResource("6_grg3l")
+shader_parameter/color = Color(0.4, 0.35, 0.3, 1)
+shader_parameter/specular = Color(0, 0, 0, 1)
+shader_parameter/fresnel = Color(0.2, 0.2, 0.2, 0)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_stairs_ramp"]
+size = Vector3(5, 0.3, 12)
+
+[node name="RoomTriggers" type="Node3D" unique_id=206421139]
+
+[node name="Character" parent="." unique_id=864869144 instance=ExtResource("1_jw32o")]
+transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0, 0.1, 10)
+
+[node name="WorldEnvironment" parent="." unique_id=1160414132 instance=ExtResource("2_50glp")]
 environment = SubResource("Environment_f8w8m")
 camera_attributes = SubResource("CameraAttributesPractical_qo5hu")
-compositor = SubResource("Compositor_8gbba")
+compositor = SubResource("Compositor_l3p17")
 
-[node name="NPC_Carlito" parent="." unique_id=1257932761 instance=ExtResource("3_8gbba")]
-transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -1.967917, 0.5444555, -13.432383)
-npc_name = "Carlito The Schemer"
-npc_personality = "Grumpy old homeless man."
-npc_background = "Former gas station manager, got fired for stealing from the register. Now tries to make it big as an entrepreneur."
-npc_goals = "Make money, retire comfortably, scam people."
-npc_knowledge = "Knows about local gossip and current events."
-player_appearance = "The player is a green, capsule-shaped entity, but is human and this is not weird."
-enable_vision = true
+[node name="NPCBase_SpaghettiJim" parent="." unique_id=1002337649 node_paths=PackedStringArray("nav_agent") instance=ExtResource("4_bmxlf")]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -10.5, 0.16, 0)
+npc_name = "Spaghetti Jim"
+npc_location = "Living Room"
+npc_personality = "A fancy and bubbly Italian chef."
+npc_background = "Famous Italian chef Spaghetti Jim, who ran multiple five star spaghetti joints before being caught up in a scandal about reusing spaghetti sauce."
+npc_goals = "Make lotsa pasta."
+npc_knowledge = "Knows lots about cooking."
+npc_appearance = "A tall man."
+player_name = "Lace Editing"
+player_appearance = "The player is a green humanoid figure, shaped like a capsule."
+enable_emotion_decay = false
+emotion_decay_rate = 0.01
+emotion_decay_time = 999.0
+base_patience_time = 60.0
+max_response_length = "1-5 sentences"
+greeting = "Mama Mia!"
+tts_provider = 1
+azure_voice = 8
+autonomous_decision_interval = 25.0
+npc_current_goal = "Convince the player to leave."
+nav_agent = NodePath("NavigationAgent3D")
 
-[node name="MeshInstance3D" parent="NPC_Carlito" index="1" unique_id=1325260183]
-material_override = SubResource("StandardMaterial3D_kry3j")
+[node name="Skeleton3D" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature" parent_id_path=PackedInt32Array(1002337649, 1273267177, 2092164116) index="0" unique_id=345595133]
+bones/0/position = Vector3(-21.104023, 28.110504, -7457.2754)
+bones/0/rotation = Quaternion(-0.7286254, -0.050565675, 0.012763046, 0.68292403)
+bones/1/position = Vector3(-4.8536553e-05, 521.9796, -69.380295)
+bones/1/rotation = Quaternion(-0.033672843, 0.014934496, 0.025748428, 0.99898964)
+bones/2/position = Vector3(2.428285e-07, 614.33356, 9.760185e-05)
+bones/2/rotation = Quaternion(0.010415669, 0.002277997, 0.014367029, 0.99984)
+bones/3/position = Vector3(1.3413179e-05, 702.0896, 4.014859e-06)
+bones/3/rotation = Quaternion(0.010296815, 0.0024783448, 0.0145064, 0.99983877)
+bones/4/position = Vector3(5.780801e-06, 789.85657, 0.00024169275)
+bones/4/rotation = Quaternion(0.11572577, -0.0022736292, 0.0031158482, 0.9932738)
+bones/5/position = Vector3(-3.7373822e-05, 560.40753, 134.12762)
+bones/5/rotation = Quaternion(-0.073734656, 0.0072877286, -0.0016038185, 0.99725)
+bones/6/position = Vector3(-8.410778e-06, 1429.6891, 342.1815)
+bones/7/position = Vector3(347.0014, 647.0607, -17.292631)
+bones/7/rotation = Quaternion(-0.65603715, -0.34711525, 0.49973992, -0.44652697)
+bones/8/position = Vector3(-0.0001304856, 754.40137, -0.000260856)
+bones/8/rotation = Quaternion(0.4884715, 0.18515542, 0.090978384, 0.8478421)
+bones/9/position = Vector3(-0.000100161604, 1460.2667, -7.499731e-05)
+bones/9/rotation = Quaternion(-0.00011337178, -9.996583e-05, 0.013156512, 0.9999135)
+bones/10/position = Vector3(6.373011e-07, 1908.9751, 7.5467688e-06)
+bones/10/rotation = Quaternion(0.08176806, -0.28013632, -0.034331374, 0.9558552)
+bones/11/position = Vector3(-164.1195, 293.6974, 71.4455)
+bones/12/position = Vector3(-29.448105, 273.5755, 0.00027408666)
+bones/13/position = Vector3(1.213951, 213.38359, 7.2820396e-05)
+bones/14/position = Vector3(28.234425, 171.14769, 0.00028256682)
+bones/15/position = Vector3(-208.68286, 780.5616, 11.935803)
+bones/16/position = Vector3(-1.0654298, 157.28703, -0.00011710134)
+bones/17/position = Vector3(-0.14532162, 144.70567, 7.2361465e-05)
+bones/18/position = Vector3(1.2104416, 112.74147, -0.0005302294)
+bones/19/position = Vector3(-77.863884, 794.30774, -39.229126)
+bones/20/position = Vector3(-1.3015465, 174.82092, -9.606758e-05)
+bones/21/position = Vector3(1.1679568, 166.92513, -7.042641e-05)
+bones/22/position = Vector3(0.13355185, 136.03442, -0.00059196167)
+bones/23/position = Vector3(64.75334, 742.1904, -8.647934)
+bones/24/position = Vector3(-0.6181816, 194.60265, -0.00013892897)
+bones/25/position = Vector3(-0.713203, 163.16829, 0.00022175835)
+bones/26/position = Vector3(1.3315574, 157.13272, 0.00025427772)
+bones/27/position = Vector3(221.7934, 710.9484, 6.6795707)
+bones/28/position = Vector3(-0.060344882, 162.08922, -0.00023118302)
+bones/29/position = Vector3(-0.09689953, 141.51974, -8.39174e-06)
+bones/30/position = Vector3(0.15732217, 122.91144, 0.00026487716)
+bones/31/position = Vector3(-347.00177, 647.5025, -20.608482)
+bones/31/rotation = Quaternion(0.65412354, -0.34819934, 0.51917696, 0.42583457)
+bones/32/position = Vector3(7.5717e-05, 754.40155, -0.0005722858)
+bones/32/rotation = Quaternion(0.41835976, -0.27508438, -0.11714747, 0.85765976)
+bones/33/position = Vector3(0.00011244658, 1460.28, -0.00033858296)
+bones/33/rotation = Quaternion(0.00052871834, 0.004767536, -0.05734843, 0.9983427)
+bones/34/position = Vector3(-3.3776312e-05, 1909.0593, -1.011476e-05)
+bones/34/rotation = Quaternion(0.081137225, 0.17438762, 0.05563059, 0.9797505)
+bones/35/position = Vector3(167.14188, 294.87506, 65.93396)
+bones/36/position = Vector3(31.902233, 274.39542, -0.00014091842)
+bones/37/position = Vector3(-1.5856731, 214.83772, -0.00017674034)
+bones/38/position = Vector3(-30.316454, 164.61288, 0.00012574019)
+bones/39/position = Vector3(218.98155, 777.6557, 13.311089)
+bones/40/position = Vector3(1.2563628, 161.05077, -9.428702e-05)
+bones/41/position = Vector3(-0.34702784, 142.06744, -0.00018537174)
+bones/42/position = Vector3(-0.9091263, 118.2705, -9.545224e-05)
+bones/43/position = Vector3(76.95687, 766.4442, -28.471872)
+bones/44/position = Vector3(1.8514619, 187.8668, 3.2789394e-05)
+bones/45/position = Vector3(-1.2362611, 175.07608, -2.388144e-05)
+bones/46/position = Vector3(-0.61526483, 147.92137, 4.9824535e-05)
+bones/47/position = Vector3(-89.95462, 826.2094, -17.598297)
+bones/48/position = Vector3(0.46026215, 155.12405, -0.000119799064)
+bones/49/position = Vector3(-1.2509899, 147.45564, 0.00027005514)
+bones/50/position = Vector3(0.7908771, 116.99725, -0.00022927314)
+bones/51/position = Vector3(-205.98413, 696.19116, 6.5172668)
+bones/52/position = Vector3(-0.7301612, 176.41899, -9.583024e-05)
+bones/53/position = Vector3(1.7639714, 144.97675, 0.00036906556)
+bones/54/position = Vector3(-1.0338115, 134.58691, 0.00039997045)
+bones/55/position = Vector3(678.9639, -289.59573, 14.372591)
+bones/55/rotation = Quaternion(0.13586721, 0.07824806, 0.9850771, -0.070996106)
+bones/56/position = Vector3(-0.00010101072, 3233.6543, -8.586202e-05)
+bones/56/rotation = Quaternion(-0.13655953, -0.012291315, 0.045415133, 0.989514)
+bones/57/position = Vector3(7.920993e-05, 3392.3909, -3.061082e-05)
+bones/57/rotation = Quaternion(0.48866916, -0.0129321255, -0.026615072, 0.8719673)
+bones/60/position = Vector3(-678.9639, -289.5954, 14.231907)
+bones/60/rotation = Quaternion(-0.09048212, -0.008444569, 0.9953817, -0.030934947)
+bones/61/position = Vector3(-3.1456017e-05, 3233.8113, -5.651127e-07)
+bones/61/rotation = Quaternion(-0.095063865, 0.084914915, -0.038090866, 0.9911113)
+bones/62/position = Vector3(5.9381273e-05, 3392.1687, -0.00020906582)
+bones/62/rotation = Quaternion(0.53136134, 0.006399368, -0.011173608, 0.84704745)
+bones/63/rotation = Quaternion(0.33018208, 0.037381094, -0.012562782, 0.9430932)
 
-[editable path="NPC_Carlito"]
+[node name="Body_PolySphere1_default_0" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature/Skeleton3D" index="0" unique_id=357483258]
+surface_material_override/0 = SubResource("ShaderMaterial_d5bq8")
+
+[node name="HeadCameraAttachment" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature/Skeleton3D" index="2" unique_id=1322093036]
+transform = Transform3D(0.9978585, -0.05763304, -0.03093418, 0.030378997, -0.010485053, 0.99948347, -0.05792765, -0.99828273, -0.008711651, -75.08345, -100.0195, -10599.661)
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1278560827]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0075654984, 0.0099925995, -0.016109467)
+navigation_mesh = SubResource("NavigationMesh_f36oo")
+
+[node name="LivingRoom" type="Area3D" parent="NavigationRegion3D" unique_id=2085866546]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.5, 2, 0)
+script = ExtResource("7_frkhe")
+room_description = "A spacious living room with high ceilings. The fireplace is cold. Shadows dance in the corners."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/LivingRoom" unique_id=1356217466]
+shape = SubResource("BoxShape3D_living_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/LivingRoom" unique_id=1940976774]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/LivingRoom/Floor" unique_id=1607656355]
+mesh = SubResource("BoxMesh_living_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_ax78n")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/LivingRoom/Floor" unique_id=768733528]
+shape = SubResource("BoxShape3D_living_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/LivingRoom" unique_id=97951919]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "LIVING ROOM"
+font_size = 64
+outline_size = 8
+
+[node name="Kitchen" type="Area3D" parent="NavigationRegion3D" unique_id=1007973208]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.5, 2, 3.6892452)
+script = ExtResource("7_frkhe")
+room_name = "Kitchen"
+room_description = "A modest kitchen with white tile floors. The knives are kept in a block on the counter."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Kitchen" unique_id=2087261618]
+shape = SubResource("BoxShape3D_kitchen_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Kitchen" unique_id=531152814]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Kitchen/Floor" unique_id=11090530]
+mesh = SubResource("BoxMesh_kitchen_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_j7ulc")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Kitchen/Floor" unique_id=2050931109]
+shape = SubResource("BoxShape3D_kitchen_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Kitchen" unique_id=993019879]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "KITCHEN"
+font_size = 64
+outline_size = 8
+
+[node name="Bedroom" type="Area3D" parent="NavigationRegion3D" unique_id=1937565543]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9.5, 2, 34)
+script = ExtResource("7_frkhe")
+room_name = "Master Bedroom"
+room_description = "A lavish bedroom with a large bed. Photos of you are scattered on the nightstand."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Bedroom" unique_id=1833079646]
+shape = SubResource("BoxShape3D_bedroom_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Bedroom" unique_id=1508904013]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Bedroom/Floor" unique_id=2131593432]
+mesh = SubResource("BoxMesh_bedroom_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_v6w0w")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Bedroom/Floor" unique_id=320659949]
+shape = SubResource("BoxShape3D_bedroom_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Bedroom" unique_id=1727693088]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "MASTER BEDROOM"
+font_size = 64
+outline_size = 8
+
+[node name="Bathroom" type="Area3D" parent="NavigationRegion3D" unique_id=1029340379]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.5, 2, 31.009834)
+script = ExtResource("7_frkhe")
+room_name = "Bathroom"
+room_description = "A small bathroom consisting of a toilet, bathtub, and sink."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Bathroom" unique_id=1704119394]
+shape = SubResource("BoxShape3D_bathroom_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Bathroom" unique_id=294139103]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Bathroom/Floor" unique_id=933721504]
+mesh = SubResource("BoxMesh_bathroom_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_snspp")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Bathroom/Floor" unique_id=324325894]
+shape = SubResource("BoxShape3D_bathroom_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Bathroom" unique_id=645085170]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -0.019862175, -1.8, -0.007864952)
+pixel_size = 0.01
+text = "BATHROOM"
+font_size = 64
+outline_size = 8
+
+[node name="Hallway" type="Area3D" parent="NavigationRegion3D" unique_id=658510425]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 15)
+script = ExtResource("7_frkhe")
+room_name = "Hallway"
+room_description = "A narrow hallway connecting the rooms. The floorboards creak with every step."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Hallway" unique_id=935644509]
+shape = SubResource("BoxShape3D_hallway_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Hallway" unique_id=1634462253]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Hallway/Floor" unique_id=482812104]
+mesh = SubResource("BoxMesh_hallway_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_5pcn1")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Hallway/Floor" unique_id=546097477]
+shape = SubResource("BoxShape3D_hallway_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Hallway" unique_id=1987049565]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "HALLWAY"
+font_size = 64
+outline_size = 8
+
+[node name="DiningRoom" type="Area3D" parent="NavigationRegion3D" unique_id=1234567890]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.56093, 2, 18)
+script = ExtResource("7_frkhe")
+room_name = "Dining Room"
+room_description = "A formal dining room with a long wooden table. Candles sit unlit on the surface."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/DiningRoom" unique_id=93166129]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.035705566, 0, -0.4991455)
+shape = SubResource("BoxShape3D_dining_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/DiningRoom" unique_id=1848749178]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/DiningRoom/Floor" unique_id=1342171948]
+transform = Transform3D(1.3557284, 0, 0, 0, 1, 0, 0, 0, 1.0987154, -0.0705204, 0, -0.34110832)
+mesh = SubResource("BoxMesh_dining_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_dining")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/DiningRoom/Floor" unique_id=1631864955]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.028823853, 0, -0.3982544)
+shape = SubResource("BoxShape3D_dining_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/DiningRoom" unique_id=116321362]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "DINING ROOM"
+font_size = 64
+outline_size = 8
+
+[node name="GuestBedroom" type="Area3D" parent="NavigationRegion3D" unique_id=1234567891]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.6160493, 2, 40)
+script = ExtResource("7_frkhe")
+room_name = "Guest Bedroom"
+room_description = "A cozy guest bedroom with a single bed. Everything is neatly arranged."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/GuestBedroom" unique_id=1189298942]
+shape = SubResource("BoxShape3D_guestbed_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/GuestBedroom" unique_id=2085800486]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/GuestBedroom/Floor" unique_id=1974084856]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.083099365, 0, 1.9891396)
+mesh = SubResource("BoxMesh_guestbed_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_guestbed")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/GuestBedroom/Floor" unique_id=722734079]
+shape = SubResource("BoxShape3D_guestbed_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/GuestBedroom" unique_id=1126118804]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "GUEST BEDROOM"
+font_size = 64
+outline_size = 8
+
+[node name="Office" type="Area3D" parent="NavigationRegion3D" unique_id=1234567892]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.5, 2, 18)
+script = ExtResource("7_frkhe")
+room_name = "Office"
+room_description = "A small home office with a desk and bookshelf. Papers are scattered everywhere."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Office" unique_id=136707569]
+shape = SubResource("BoxShape3D_office_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Office" unique_id=953784686]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Office/Floor" unique_id=1833016689]
+mesh = SubResource("BoxMesh_office_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_office")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Office/Floor" unique_id=1872216940]
+shape = SubResource("BoxShape3D_office_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Office" unique_id=454160503]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "OFFICE"
+font_size = 64
+outline_size = 8
+
+[node name="RecreationRoom" type="Area3D" parent="NavigationRegion3D" unique_id=1234567893]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 10.477005, -1.7692286, -31.365292)
+script = ExtResource("7_frkhe")
+room_name = "Recreation Room"
+room_description = "A dimly lit basement recreation room. Old furniture and entertainment equipment fill the space."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/RecreationRoom" unique_id=410661859]
+shape = SubResource("BoxShape3D_recreation_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/RecreationRoom" unique_id=1804571847]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/RecreationRoom/Floor" unique_id=337230738]
+mesh = SubResource("BoxMesh_recreation_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_recreation")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/RecreationRoom/Floor" unique_id=2394025]
+shape = SubResource("BoxShape3D_recreation_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/RecreationRoom" unique_id=136239116]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "RECREATION ROOM"
+font_size = 64
+outline_size = 8
+
+[node name="LaundryRoom" type="Area3D" parent="NavigationRegion3D" unique_id=1234567894]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -7.522998, -1.7692286, -44.365288)
+script = ExtResource("7_frkhe")
+room_name = "Laundry Room"
+room_description = "A basement laundry room with washer and dryer. The air smells of detergent."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/LaundryRoom" unique_id=949216819]
+shape = SubResource("BoxShape3D_laundry_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/LaundryRoom" unique_id=1456301343]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/LaundryRoom/Floor" unique_id=1974725781]
+mesh = SubResource("BoxMesh_laundry_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_laundry")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/LaundryRoom/Floor" unique_id=655974475]
+shape = SubResource("BoxShape3D_laundry_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/LaundryRoom" unique_id=310105512]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "LAUNDRY"
+font_size = 64
+outline_size = 8
+
+[node name="Storage" type="Area3D" parent="NavigationRegion3D" unique_id=1234567895]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -8.522996, -1.7692286, -26.36529)
+script = ExtResource("7_frkhe")
+room_name = "Storage Room"
+room_description = "A cluttered storage room filled with boxes and forgotten items."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/Storage" unique_id=402970667]
+shape = SubResource("BoxShape3D_storage_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/Storage" unique_id=1879204692]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Storage/Floor" unique_id=270626582]
+mesh = SubResource("BoxMesh_storage_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_storage")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Storage/Floor" unique_id=1667868843]
+shape = SubResource("BoxShape3D_storage_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/Storage" unique_id=731772097]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "STORAGE"
+font_size = 64
+outline_size = 8
+
+[node name="BasementHallway" type="Area3D" parent="NavigationRegion3D" unique_id=1234567896]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.022996426, -1.7692286, -31.365292)
+script = ExtResource("7_frkhe")
+room_name = "Basement Hallway"
+room_description = "A damp basement hallway. Water stains mark the concrete walls."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/BasementHallway" unique_id=1024802937]
+shape = SubResource("BoxShape3D_basement_hallway_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/BasementHallway" unique_id=1254955978]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/BasementHallway/Floor" unique_id=114010796]
+mesh = SubResource("BoxMesh_basement_hallway_floor")
+surface_material_override/0 = SubResource("ShaderMaterial_basement_hallway")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/BasementHallway/Floor" unique_id=2055791305]
+shape = SubResource("BoxShape3D_basement_hallway_floor")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/BasementHallway" unique_id=2109049325]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, -1.8, 0)
+pixel_size = 0.01
+text = "BASEMENT HALLWAY"
+font_size = 64
+outline_size = 8
+
+[node name="BasementStairs" type="Area3D" parent="NavigationRegion3D" unique_id=726682832]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, -0.022994995, 0.07175541, -10.629082)
+script = ExtResource("7_frkhe")
+room_name = "Basement Stairs"
+room_description = "A sloped ramp leading down to the basement. The air grows colder as you descend."
+
+[node name="TriggerCollision" type="CollisionShape3D" parent="NavigationRegion3D/BasementStairs" unique_id=1297444477]
+shape = SubResource("BoxShape3D_stairs_trigger")
+
+[node name="Floor" type="StaticBody3D" parent="NavigationRegion3D/BasementStairs" unique_id=1740834892]
+transform = Transform3D(1, 0, 0, 0, 0.948683, -0.316228, 0, 0.316228, 0.948683, 0, -2, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/BasementStairs/Floor" unique_id=767435626]
+mesh = SubResource("BoxMesh_stairs_ramp")
+surface_material_override/0 = SubResource("ShaderMaterial_stairs")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/BasementStairs/Floor" unique_id=1771807103]
+shape = SubResource("BoxShape3D_stairs_ramp")
+
+[node name="Label3D" type="Label3D" parent="NavigationRegion3D/BasementStairs" unique_id=1745967841]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, 0)
+pixel_size = 0.01
+text = "STAIRS TO BASEMENT"
+font_size = 64
+outline_size = 8
+
+[node name="CSGCombiner3D" type="CSGCombiner3D" parent="NavigationRegion3D" unique_id=327698871]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0075654984, -0.0099925995, 0.016109467)
+use_collision = true
+
+[node name="CSGBox3D" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1707822102]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.470909, 3.1976929, 47.507042)
+use_collision = true
+size = Vector3(12.172745, 7.3953857, 1)
+
+[node name="CSGBox3D10" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=2120363165]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10.599451, 3.1976929, 26.083527)
+use_collision = true
+size = Vector3(16.078007, 7.3953857, 1.8168945)
+
+[node name="CSGBox3D2" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=2030586403]
+transform = Transform3D(0, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 0, 2.9854822, 3.1976929, 44.75618)
+use_collision = true
+size = Vector3(5.5174294, 7.3953857, 0.961792)
+
+[node name="CSGBox3D5" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1263016358]
+transform = Transform3D(-1.0000001, 0, -2.9802322e-08, 0, 1, 0, 2.9802322e-08, 0, -1.0000001, 9.980443, 3.1976929, 42.500687)
+use_collision = true
+size = Vector3(13.132664, 7.3953857, 1)
+
+[node name="CSGBox3D7" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=307264678]
+transform = Transform3D(7.351372e-08, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 7.351372e-08, 17.008087, 3.1976929, 34.06209)
+use_collision = true
+size = Vector3(16.9157, 7.3953857, 1)
+
+[node name="CSGBox3D8" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1473296312]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, 9.569465, 3.1976929, 24.990131)
+use_collision = true
+size = Vector3(14.08428, 7.3953857, 1.9974976)
+
+[node name="CSGBox3D9" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=763732985]
+transform = Transform3D(-4.5695575e-08, 0, 1.0000001, 0, 1, 0, -1.0000001, 0, -4.5695575e-08, 12.715787, 3.1976929, 18.839417)
+use_collision = true
+size = Vector3(13.920584, 7.3953857, 0.41085815)
+
+[node name="CSGBox3D11" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=284592279]
+transform = Transform3D(1.997417e-15, -1, -4.3711392e-08, -4.569557e-08, -4.371139e-08, 1.0000001, -1.0000001, 0, -4.569557e-08, -1.0102987, 6.5281363, 21.665445)
+use_collision = true
+size = Vector3(52.73369, 37.648895, 0.41085815)
+
+[node name="CSGBox3D12" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=760764883]
+transform = Transform3D(1.997417e-15, -1, -4.3711392e-08, -4.569557e-08, -4.371139e-08, 1.0000001, -1.0000001, 0, -4.569557e-08, -1.0102987, 3.510309, -36.71147)
+use_collision = true
+size = Vector3(40.757362, 37.648895, 0.41085815)
+
+[node name="CSGBox3D14" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=127168729]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, 9.733995, 3.1976929, 11.796173)
+use_collision = true
+size = Vector3(13.715712, 7.3953857, 0.42234802)
+
+[node name="CSGBox3D13" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=981004002]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, 16.70596, 3.1976929, 3.6721282)
+use_collision = true
+size = Vector3(16.296913, 7.3953857, 0.42234802)
+
+[node name="CSGBox3D15" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=749713686]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, -18.968956, 3.1976929, 10.35904)
+use_collision = true
+size = Vector3(30.100597, 7.3953857, 0.97374725)
+
+[node name="CSGBox3D16" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=721736657]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, -2.2336323, 0.8746643, -27.667534)
+use_collision = true
+size = Vector3(45.987816, 12.041443, 0.69314384)
+
+[node name="CSGBox3D18" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1661393218]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, -12.596193, 0.8746643, -35.382202)
+use_collision = true
+size = Vector3(30.558483, 12.041443, 0.69314384)
+
+[node name="CSGBox3D19" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=149666635]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, 18.804094, 0.8746643, -31.268263)
+use_collision = true
+size = Vector3(20.724949, 12.041443, 0.69314384)
+
+[node name="CSGBox3D20" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=906839138]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, 10.790165, 0.8746643, -21.097244)
+use_collision = true
+size = Vector3(15.90249, 12.041443, 0.69314384)
+
+[node name="CSGBox3D21" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=818646538]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, 10.790165, 0.8746643, -41.677094)
+use_collision = true
+size = Vector3(15.90249, 12.041443, 0.69314384)
+
+[node name="CSGBox3D22" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=280132478]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, -7.464432, 0.8746643, -50.707935)
+use_collision = true
+size = Vector3(10.007727, 12.041443, 0.69314384)
+
+[node name="CSGBox3D25" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=662348097]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, 0.20957935, 0.8746643, -46.569958)
+use_collision = true
+size = Vector3(5.00773, 12.041443, 0.69314384)
+
+[node name="CSGBox3D23" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=28975215]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, -7.464432, 0.8746643, -35.391575)
+use_collision = true
+size = Vector3(10.007727, 12.041443, 6.0018992)
+
+[node name="CSGBox3D24" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=965162540]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, -7.4644322, 0.8746643, -20.17512)
+use_collision = true
+size = Vector3(10.007727, 12.041443, 0.45358634)
+
+[node name="CSGBox3D17" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=912568123]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, 2.737636, 0.8746643, -25.919115)
+use_collision = true
+size = Vector3(42.49098, 12.041443, 0.5095501)
+
+[node name="CeilingRamp" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1298623058]
+transform = Transform3D(-7.595146e-15, -1, 4.37114e-08, 0.24725285, -4.23542e-08, -0.9689511, 0.9689511, 1.0807758e-08, 0.24725285, 2.6592827, 5.0057673, -10.555801)
+use_collision = true
+size = Vector3(12.1128235, 12.041443, 0.4354391)
+
+[node name="CSGBox3D3" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=954589119]
+transform = Transform3D(0, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 0, -8.979969, 3.1976929, 41.5087)
+use_collision = true
+size = Vector3(13.053155, 7.3953857, 1)
+
+[node name="CSGBox3D6" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1270458450]
+transform = Transform3D(0, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 0, -9.011639, 3.1976929, 30.851667)
+use_collision = true
+size = Vector3(7.7754345, 7.3953857, 1)
+
+[node name="WallLivingRoom" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=566334489]
+transform = Transform3D(-1.0000001, 0, -8.940697e-08, 0, 1, 0, 8.940697e-08, 0, -1.0000001, -1.266161, 3.1976929, -4.5353312)
+use_collision = true
+size = Vector3(35.8267, 7.3953857, 0.42234802)
+
+[node name="WallHallway1" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1552725040]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, -2.6824973, 3.1976929, 29.939419)
+use_collision = true
+size = Vector3(9.53618, 7.3953857, 0.37652206)
+
+[node name="WallHallway2" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1870018239]
+transform = Transform3D(-4.5695575e-08, 0, 1.0000001, 0, 1, 0, -1.0000001, 0, -4.5695575e-08, 2.70355, 3.1976929, 26.777737)
+use_collision = true
+size = Vector3(30.50021, 7.3953857, 0.41085815)
+
+[node name="WallBedrooms" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1836208898]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4682274, 3.1976929, 34.86474)
+use_collision = true
+size = Vector3(12.178108, 7.3953857, 0.33398438)
+
+[node name="DoorHallwayLivingRoom5" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=656078956]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, -0.4050026, 2.0687332, 28.677197)
+operation = 2
+use_collision = true
+size = Vector3(2.6446252, 5.1374664, 9.717588)
+
+[node name="DoorHallwayLivingRoom7" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1240073640]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, -0.4050026, -1.2095795, -23.853544)
+operation = 2
+use_collision = true
+size = Vector3(2.6446252, 5.1374664, 9.717588)
+
+[node name="DoorHallwayLivingRoom8" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=431712226]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, -3.157398, -1.2095795, -44.42228)
+operation = 2
+use_collision = true
+size = Vector3(2.6446252, 5.1374664, 4.212798)
+
+[node name="DoorHallwayLivingRoom6" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1459473272]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, 3.1533012, 2.0687332, 22.08295)
+operation = 2
+use_collision = true
+size = Vector3(2.6446252, 5.1374664, 2.6009817)
+
+[node name="DoorHallwayLivingRoom4" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=1785882966]
+transform = Transform3D(1.0000001, 0, 1.7682976e-07, 0, 1, 0, -1.7682976e-07, 0, 1.0000001, -0.08915329, 2.0687332, 35.70219)
+operation = 2
+use_collision = true
+size = Vector3(2.6446252, 5.1374664, 3.6737022)
+
+[node name="DoorHallwayLivingRoom" type="CSGBox3D" parent="NavigationRegion3D/CSGCombiner3D" unique_id=416003148]
+transform = Transform3D(1.3311836e-07, 0, -1.0000001, 0, 1, 0, 1.0000001, 0, 1.3311836e-07, 0.29883376, 2.0687332, -4.322324)
+operation = 2
+use_collision = true
+size = Vector3(2.6446252, 5.1374664, 4.3724957)
+
+[editable path="NPCBase_SpaghettiJim"]
+[editable path="NPCBase_SpaghettiJim/AnimeBoy"]
