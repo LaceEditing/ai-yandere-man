@@ -377,34 +377,34 @@ look_at_modifier_3d = NodePath("AnimeBoy/Armature/GeneralSkeleton/LookAtModifier
 nav_agent = NodePath("NavigationAgent3D")
 
 [node name="GeneralSkeleton" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature" parent_id_path=PackedInt32Array(1257932761, 1885396015, 961207381) index="0" unique_id=1489186224]
-bones/0/position = Vector3(-0.41431165, 74.52843, 0.5144322)
-bones/0/rotation = Quaternion(-0.03772162, -0.04032773, -0.0263042, 0.99812776)
-bones/1/rotation = Quaternion(0.03173864, 0.016926989, 0.02499304, 0.99904037)
-bones/2/rotation = Quaternion(0.010601299, 0.003962603, 0.013858616, 0.99984)
-bones/3/rotation = Quaternion(0.009910381, 0.004201672, 0.0143141, 0.9998396)
-bones/4/rotation = Quaternion(0.051658697, -0.0023623703, 0.0031981235, 0.998657)
-bones/5/rotation = Quaternion(-0.073975794, 0.006773543, -0.0019063395, 0.9972353)
-bones/7/rotation = Quaternion(0.40214396, 0.5815178, 0.55797267, -0.4344927)
-bones/8/rotation = Quaternion(0.17475662, 0.9799787, -0.09521132, 0.006065763)
-bones/9/rotation = Quaternion(-0.050573774, -0.7034131, 0.045836482, 0.7074965)
-bones/10/rotation = Quaternion(-0.058017954, 0.70341355, -0.11072796, 0.69970185)
-bones/31/rotation = Quaternion(0.41885984, -0.56330276, -0.5649617, -0.43366444)
-bones/32/rotation = Quaternion(-0.25520515, 0.9654962, -0.02163814, 0.0471104)
-bones/33/rotation = Quaternion(-0.0443239, 0.73489815, -0.051790345, 0.6747429)
-bones/34/rotation = Quaternion(0.008165918, -0.7325659, 0.048215996, 0.6789373)
-bones/55/rotation = Quaternion(0.13404208, 0.08879044, 0.98600423, -0.044100035)
-bones/56/rotation = Quaternion(-0.03810521, 0.99325716, -0.108855225, 0.011777831)
-bones/57/rotation = Quaternion(-0.016642507, 0.72072, -0.692561, 0.025398253)
-bones/60/rotation = Quaternion(-0.09304709, 0.0014928686, 0.99387074, -0.059674393)
-bones/61/rotation = Quaternion(0.034983676, 0.9934672, -0.064419165, -0.08745992)
-bones/62/rotation = Quaternion(-0.016551271, 0.6843817, -0.7289096, -0.0062127467)
-bones/63/rotation = Quaternion(-8.195325e-08, 0.9981396, 0.060970426, -1.2009542e-07)
+bones/0/position = Vector3(-0.42557085, 74.535675, 0.52130604)
+bones/0/rotation = Quaternion(-0.038200617, -0.040953703, -0.025785536, 0.9980975)
+bones/1/rotation = Quaternion(0.031168938, 0.016676726, 0.0250662, 0.99906063)
+bones/2/rotation = Quaternion(0.010587083, 0.0039309217, 0.013850835, 0.9998404)
+bones/3/rotation = Quaternion(0.009847735, 0.00417448, 0.014351669, 0.9998399)
+bones/4/rotation = Quaternion(0.05198031, -0.002418642, 0.003658212, 0.9986385)
+bones/5/rotation = Quaternion(-0.072302684, 0.0062850704, -0.0014742156, 0.9973619)
+bones/7/rotation = Quaternion(0.40180102, 0.5818319, 0.55673146, -0.4359791)
+bones/8/rotation = Quaternion(0.17513876, 0.97966284, -0.09776107, 0.0054738843)
+bones/9/rotation = Quaternion(-0.050568815, -0.7034388, 0.045841288, 0.70747095)
+bones/10/rotation = Quaternion(-0.05757899, 0.7035882, -0.110757016, 0.69955796)
+bones/31/rotation = Quaternion(0.41881675, -0.56334186, -0.5646912, -0.4340075)
+bones/32/rotation = Quaternion(-0.25480226, 0.9655937, -0.021793216, 0.04722131)
+bones/33/rotation = Quaternion(-0.044332635, 0.7348556, -0.051782157, 0.67478925)
+bones/34/rotation = Quaternion(0.00825257, -0.7324588, 0.047851514, 0.67907757)
+bones/55/rotation = Quaternion(0.1340179, 0.08703672, 0.98617935, -0.043752074)
+bones/56/rotation = Quaternion(-0.038368367, 0.9934086, -0.10730105, 0.012399943)
+bones/57/rotation = Quaternion(-0.016722118, 0.7208454, -0.6924247, 0.025499903)
+bones/60/rotation = Quaternion(-0.093228586, 0.00054862385, 0.9938763, -0.05931498)
+bones/61/rotation = Quaternion(0.034935795, 0.99348104, -0.06424005, -0.08745395)
+bones/62/rotation = Quaternion(-0.016494442, 0.68412834, -0.7291512, -0.005916643)
+bones/63/rotation = Quaternion(-7.91062e-08, 0.9981457, 0.060871422, -1.18304854e-07)
 
 [node name="Body_PolySphere1_default_0" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature/GeneralSkeleton" index="0" unique_id=195997761]
 surface_material_override/0 = SubResource("ShaderMaterial_50glp")
 
 [node name="HeadCameraAttachment" parent="NPCBase_SpaghettiJim/AnimeBoy/Armature/GeneralSkeleton" index="2" unique_id=1322093036]
-transform = Transform3D(0.9980531, -0.057906322, -0.023175588, 0.05832415, 0.9981394, 0.017778054, 0.02210302, -0.019095153, 0.99957335, -0.9870222, 105.92913, -1.110987)
+transform = Transform3D(0.99780726, -0.060879927, -0.025965905, 0.06130853, 0.99799, 0.016041562, 0.02493709, -0.017598331, 0.9995341, -1.0372044, 105.93174, -1.167191)
 
 [node name="ActionController" parent="NPCBase_SpaghettiJim" index="8" unique_id=1440942483 node_paths=PackedStringArray("skeleton", "look_at_modifier_3d")]
 skeleton = NodePath("../AnimeBoy/Armature/GeneralSkeleton")
@@ -412,7 +412,7 @@ head_bone_name = "Head"
 look_at_modifier_3d = NodePath("../AnimeBoy/Armature/GeneralSkeleton/LookAtModifier3D")
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1278560827]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0075210333, 0.010242462, -0.0160923)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0075654984, 0.0099925995, -0.016109467)
 navigation_mesh = SubResource("NavigationMesh_f36oo")
 
 [node name="LivingRoom" type="Area3D" parent="NavigationRegion3D" unique_id=2085866546]

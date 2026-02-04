@@ -17,10 +17,12 @@ config/icon="res://icon.svg"
 
 [audio]
 
+buses/default_bus_layout="uid://dekroewbjnhsd"
 driver/enable_input=true
 
 [autoload]
 
+PauseMenu="*res://Scenes/pause_menu.tscn"
 AIManager="*uid://cx77okrl0fcu8"
 DialogueUI="*uid://b4xhh0srl2yh7"
 WorldLore="*uid://bhj62o43kkqu6"
@@ -30,6 +32,7 @@ RoomManager="*uid://cga5g022wv7tn"
 Overlay_Debug="*uid://bhjoc708ay4he"
 Prosody="*uid://cvcpbyg2hrtek"
 UISettingsMenu="*uid://c8xhh1srl3yk8"
+GameManager="*uid://blnvt4stpjail"
 
 [display]
 
@@ -38,7 +41,7 @@ window/size/viewport_height=1440
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/instant-realistic-light/plugin.cfg")
+enabled=PackedStringArray("res://addons/instant-realistic-light/plugin.cfg", "res://addons/raytraced_audio/plugin.cfg")
 
 [input]
 
@@ -107,9 +110,16 @@ OpenUIMenu={
 
 3d/physics_engine="Jolt Physics"
 
+[raytraced_audio]
+
+reverb_bus=&"RaytracedReverb"
+ambient_bus=&"RaytracedAmbient"
+
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=4
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=4
 
 [shader_globals]
 

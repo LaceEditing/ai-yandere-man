@@ -8,53 +8,59 @@ default_font_size = 28
 [node name="DialogueUI" type="CanvasLayer" unique_id=1156747975]
 layer = 10
 script = ExtResource("1_dialogue")
+typing_speed = 0.01
 auto_hide_delay = 2.0
+slide_duration = 0.5
 
-[node name="NPCTextContainer" type="PanelContainer" parent="." unique_id=1759042652]
-modulate = Color(1, 1, 1, 0.9)
+[node name="DialogueContainer" type="Control" parent="." unique_id=560142644]
+layout_mode = 3
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 40.0
-offset_top = -200.0
-offset_right = -40.0
-offset_bottom = -40.0
+offset_top = 55.0
 grow_horizontal = 2
 grow_vertical = 0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="NPCTextContainer" unique_id=1975012918]
+[node name="NPCTextContainer" type="PanelContainer" parent="DialogueContainer" unique_id=1759042652]
+modulate = Color(1, 1, 1, 0.95)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = -100.0
+offset_bottom = -10.0
+grow_horizontal = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DialogueContainer/NPCTextContainer" unique_id=1975012918]
 layout_mode = 2
 
-[node name="NPCNameLabel" type="Label" parent="NPCTextContainer/VBoxContainer" unique_id=1372497171]
+[node name="NPCNameLabel" type="Label" parent="DialogueContainer/NPCTextContainer/VBoxContainer" unique_id=1372497171]
 layout_mode = 2
 theme = SubResource("Theme_dialogue")
 theme_override_colors/font_color = Color(1, 0.8, 0.4, 1)
 theme_override_font_sizes/font_size = 24
 text = "NPC Name"
 
-[node name="DialogueLabel" type="Label" parent="NPCTextContainer/VBoxContainer" unique_id=1889695177]
-custom_minimum_size = Vector2(800, 120)
+[node name="DialogueLabel" type="Label" parent="DialogueContainer/NPCTextContainer/VBoxContainer" unique_id=1889695177]
+custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
 theme = SubResource("Theme_dialogue")
 theme_override_font_sizes/font_size = 28
-text = "NPC dialogue appears here as they speak..."
+text = "..."
 autowrap_mode = 3
+clip_text = true
+max_lines_visible = 2
 
-[node name="InputPrompt" type="PanelContainer" parent="." unique_id=860728569]
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -400.0
-offset_top = -100.0
-offset_right = 400.0
-offset_bottom = -20.0
+[node name="InputPrompt" type="PanelContainer" parent="DialogueContainer" unique_id=860728569]
+modulate = Color(1, 1, 1, 0.98)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = -5.0
+offset_bottom = 65.0
 grow_horizontal = 2
-grow_vertical = 0
 
-[node name="InputField" type="LineEdit" parent="InputPrompt" unique_id=521322322]
+[node name="InputField" type="LineEdit" parent="DialogueContainer/InputPrompt" unique_id=521322322]
 layout_mode = 2
 theme = SubResource("Theme_dialogue")
 theme_override_font_sizes/font_size = 28

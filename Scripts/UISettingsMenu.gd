@@ -24,7 +24,7 @@ var pending_scale: float = 1.5
 var pending_auto: bool = true
 
 func _ready():
-	hide()
+	hide()  # Hide by default - can be shown standalone or in PauseMenu
 	
 	# Connect signals
 	scale_slider.value_changed.connect(_on_scale_changed)
@@ -135,8 +135,16 @@ func _on_apply_pressed():
 
 func _on_close_pressed():
 	"""Close the menu without applying (or after applying)."""
-	hide()
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	# If we're in standalone mode, hide ourselves
+	# If we're embedded in pause menu, close the pause menu
+	var pause_menu = get_node_or_null("/root/PauseMenu")
+	if pause_menu and pause_menu.visible and pause_menu.is_paused:
+		# Embedded in pause menu - close it
+		pause_menu.close_menu()
+	else:
+		# Standalone mode
+		hide()
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 func _save_settings():
 	"""Save settings to config file."""

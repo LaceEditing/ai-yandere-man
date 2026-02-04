@@ -5,20 +5,17 @@ extends CanvasLayer
 ## NOW: Supports auto-greetings without opening input field
 
 # UI References
-@onready var dialogue_container = $DialogueContainer
-@onready var npc_text_container = $DialogueContainer/NPCTextContainer
-@onready var npc_name_label = $DialogueContainer/NPCTextContainer/VBoxContainer/NPCNameLabel
-@onready var npc_dialogue_label = $DialogueContainer/NPCTextContainer/VBoxContainer/DialogueLabel
+@onready var npc_text_container = $NPCTextContainer
+@onready var npc_name_label = $NPCTextContainer/VBoxContainer/NPCNameLabel
+@onready var npc_dialogue_label = $NPCTextContainer/VBoxContainer/DialogueLabel
 
-@onready var input_prompt = $DialogueContainer/InputPrompt
-@onready var input_field = $DialogueContainer/InputPrompt/InputField
+@onready var input_prompt = $InputPrompt
+@onready var input_field = $InputPrompt/InputField
 
 # Current NPC we're talking to
 var current_npc: Node = null
 var is_generating: bool = false
 var is_closing: bool = false  # Prevent race conditions during close
-var player_interrupted: bool = false  # Track if player interrupted during voice playback
-var input_active: bool = false  # Track if player is actually typing (input raised)
 
 # Typing effect with voice sync
 var current_text: String = ""
@@ -41,12 +38,6 @@ var stt_provider = null
 var current_scale_factor: float = 1.0
 var base_font_size: int = 18
 
-# Animation
-var container_default_top: float = 55.0  # Positive = NPC visible at bottom, input hidden
-var container_raised_top: float = -85.0  # Negative = raised up to show both
-var is_animating: bool = false
-@export var slide_duration: float = 0.3
-
 ## INSPECTOR ADJUSTABLE SETTINGS ##
 @export_category("UI Scaling")
 @export var enable_auto_scaling: bool = true  ## Auto-scale based on screen resolution
@@ -55,7 +46,7 @@ var is_animating: bool = false
 
 # Check if input is currently open (for movement blocking)
 func is_input_open() -> bool:
-	return input_active
+	return input_prompt.visible
 
 # Check if AI is busy generating or typing (prevent interruption)
 func is_busy() -> bool:
@@ -64,14 +55,6 @@ func is_busy() -> bool:
 # Check if conversation is still active (includes waiting for auto-close)
 func has_active_conversation() -> bool:
 	return current_npc != null and not is_closing
-
-# Check if we can show input (for interruption logic)
-func can_show_input() -> bool:
-	# Allow showing input if:
-	# - Not generating (AI response complete)
-	# - Not closing
-	# Even if typing or waiting for voice (those can be interrupted)
-	return not is_generating and not is_closing
 
 func _ready():
 	# Setup voice recorder
@@ -87,9 +70,9 @@ func _ready():
 	hide_timer.timeout.connect(_on_hide_timer_timeout)
 	add_child(hide_timer)
 	
-	# Start with NPC container visible, input hidden
-	npc_text_container.show()
+	# Start with UI elements hidden
 	input_prompt.hide()
+	npc_text_container.hide()
 	
 	# Apply UI scaling based on settings
 	if apply_scale_on_ready:
@@ -99,8 +82,8 @@ func _ready():
 			_apply_scale(manual_scale_override)
 
 func _input(event):
-	# Only intercept input if player is actively typing
-	if input_active:
+	# Check if input field is open
+	if input_prompt.visible:
 		# Submit message with Enter (using SendMessage action)
 		if event.is_action_pressed("SendMessage"):
 			_submit_message()
@@ -140,101 +123,65 @@ func _process(delta):
 			# Check if done typing
 			if display_text.length() >= current_text.length():
 				is_typing = false
-				# Don't start timer yet - wait for voice to finish
-				# Timer will start in _on_npc_voice_finished()
+				# NEW: Start timer immediately when typing finishes
+				# Voice can keep playing in background
+				_start_auto_hide_timer()
 
 func show_dialogue(npc: Node, show_input: bool = true):
-	# Allow new dialogue even if busy (for interruptions), but not if closing
-	if is_closing:
-		print("DialogueUI: Currently closing, ignoring dialogue request")
+	# Don't show new input if AI is still responding or closing
+	if is_busy():
+		print("DialogueUI: System busy, ignoring dialogue request")
 		return
-	
-	# Don't check for interruption here - wait until player actually submits message
-	# This allows player to start typing without triggering interruption
 	
 	# If switching NPCs or restarting with same NPC, clean up old state
 	if current_npc and current_npc != npc:
 		_cleanup_current_npc()
-	elif current_npc == npc and not show_input:
-		# Same NPC, only reset if it's NOT user typing (auto-greetings)
+	elif current_npc == npc:
+		# Same NPC, just reset state without full cleanup
 		_reset_state()
 	
 	current_npc = npc
 	is_closing = false  # Ensure we're not in closing state
 	npc_name_label.text = npc.npc_name
 	
-	# Connect to NPC signals (check if not already connected)
-	if not npc.dialogue_updated.is_connected(_on_dialogue_updated):
-		npc.dialogue_updated.connect(_on_dialogue_updated)
-	if not npc.dialogue_finished.is_connected(_on_dialogue_finished):
-		npc.dialogue_finished.connect(_on_dialogue_finished)
+	# Connect to NPC signals
+	npc.dialogue_updated.connect(_on_dialogue_updated)
+	npc.dialogue_finished.connect(_on_dialogue_finished)
 	
-	# Connect to voice signals for proper synchronization
-	if npc.has_signal("voice_started") and not npc.voice_started.is_connected(_on_npc_voice_started):
+	# NEW: Connect to voice signals for proper synchronization
+	if npc.has_signal("voice_started"):
 		npc.voice_started.connect(_on_npc_voice_started)
-	if npc.has_signal("voice_finished") and not npc.voice_finished.is_connected(_on_npc_voice_finished):
+	if npc.has_signal("voice_finished"):
 		npc.voice_finished.connect(_on_npc_voice_finished)
 	
 	# Get STT provider from AIManager
 	stt_provider = AIManager.get_stt_provider()
 	if stt_provider:
-		if not stt_provider.transcription_received.is_connected(_on_transcription_received):
-			stt_provider.transcription_received.connect(_on_transcription_received)
-		if not stt_provider.transcription_failed.is_connected(_on_transcription_failed):
-			stt_provider.transcription_failed.connect(_on_transcription_failed)
+		stt_provider.transcription_received.connect(_on_transcription_received)
+		stt_provider.transcription_failed.connect(_on_transcription_failed)
 	
 	# Show input prompt only if requested (for player-initiated conversations)
 	if show_input:
 		_show_input()
 
 func _show_input():
-	input_active = true
+	input_prompt.show()
 	input_field.text = ""
 	input_field.grab_focus()
-	_slide_ui_up()
 
 func _close_input():
-	input_active = false
-	input_field.release_focus()
-	_slide_ui_down()
+	input_prompt.hide()
 	input_field.text = ""
 
 func _submit_message():
 	var message = input_field.text.strip_edges()
 	
-	if message.is_empty() or not current_npc:
+	if message.is_empty() or not current_npc or is_generating:
 		return
 	
-	# Block submission if audio is being generated but hasn't started playing yet
-	if waiting_for_voice or (is_generating and not current_npc.has_method("is_currently_speaking")):
-		print("DialogueUI: Waiting for NPC to start speaking before accepting new input")
-		return
-	
-	# Check for interruption NOW - only when player actually submits message
-	# Check if NPC is currently speaking out loud (not just text visible)
-	var npc_is_speaking = current_npc.has_method("is_currently_speaking") and current_npc.is_currently_speaking()
-	if npc_is_speaking:
-		player_interrupted = true
-		print("DialogueUI: Player interrupted NPC voice by submitting message")
-		# Stop voice NOW when user commits to sending (press Enter)
-		if current_npc.has_method("stop_voice"):
-			current_npc.stop_voice()
-	else:
-		player_interrupted = false
-	
-	# Send to NPC with interruption flag
+	# Send to NPC
 	is_generating = true
-	if current_npc.has_method("talk_to_npc_with_interruption"):
-		current_npc.talk_to_npc_with_interruption(message, player_interrupted)
-	else:
-		current_npc.talk_to_npc(message)
-	
-	player_interrupted = false  # Reset flag after using
-	
-	# Close input and release player
-	_close_input()
-
-func close_dialogue():
+	current_npc.talk_to_npc(message)
 	# Prevent re-entry
 	if is_closing:
 		return
@@ -265,21 +212,6 @@ func close_dialogue():
 		_stop_voice_recording()
 	
 	# Reset all state
-	_reset_state()
-	
-	# Slide back to default position (NPC visible, input hidden)
-	if dialogue_container.offset_top != container_default_top:
-		var tween = create_tween()
-		tween.tween_property(dialogue_container, "offset_top", container_default_top, slide_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-		await tween.finished
-	
-	# Clear text content
-	npc_dialogue_label.text = ""
-	input_field.text = ""
-	
-	# Finally clear closing flag
-	is_closing = false
-
 # Cleanup helpers for better state management
 func _cleanup_current_npc():
 	"""Safely disconnect all signals from current NPC."""
@@ -302,68 +234,54 @@ func _reset_state():
 	is_generating = false
 	is_typing = false
 	waiting_for_voice = false
-	player_interrupted = false
-	input_active = false
 	current_text = ""
 	display_text = ""
 	typing_timer = 0.0
 
 # Backwards compatibility
 func disconnect_npc_signals():
-	_cleanup_current_npc()
+	_cleanup_current_npc(
+		hide_timer.stop()
 
-# Animation helpers
-func _slide_ui_up():
-	"""Slide entire dialogue container up when player starts typing."""
-	if is_animating:
+func disconnect_npc_signals():
+	if current_npc:
+		if current_npc.dialogue_updated.is_connected(_on_dialogue_updated):
+			current_npc.dialogue_updated.disconnect(_on_dialogue_updated)
+		if current_npc.dialogue_finished.is_connected(_on_dialogue_finished):
+			current_npc.dialogue_finished.disconnect(_on_dialogue_finished)
+		# NEW: Disconnect voice signals
+		if current_npc.has_signal("voice_started") and current_npc.voice_started.is_connected(_on_npc_voice_started):
+			current_npc.voice_started.disconnect(_on_npc_voice_started)
+		if current_npc.has_signal("voice_finished") and current_npc.voice_finished.is_connected(_on_npc_voice_finished):
+			current_npc.voice_finished.disconnect(_on_npc_voice_finished)
+
+funALWAYS clear is_generating flag to prevent permanent blocking
+	is_generating = false
+	
+	# Don't show NPC response if input is VISIBLE and FOCUSED (suppress greeting during active chat)
+	if input_prompt.visible and input_field.has_focus():
 		return
-	is_animating = true
 	
-	# Show input and slide up
-	input_prompt.show()
-	var tween = create_tween()
-	tween.tween_property(dialogue_container, "offset_top", container_raised_top, slide_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	
-	await tween.finished
-	is_animating = false
-
-func _slide_ui_down():
-	"""Slide entire dialogue container back to default position (NPC visible, input hidden)."""
-	if is_animating:
-		return
-	is_animating = true
-	
-	var tween = create_tween()
-	tween.tween_property(dialogue_container, "offset_top", container_default_top, slide_duration).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
-	
-	await tween.finished
-	input_prompt.hide()  # Hide after sliding down
-	is_animating = false
-
-func _on_dialogue_updated(text: String):
 	# Ignore if we're closing
 	if is_closing:
 		return
 	
-	# If we're currently typing out old text, stop it but keep the old text visible
-	# New text will show once voice starts
-	if is_typing:
-		is_typing = false
-		# Keep current display_text visible instead of clearing it
+	# Show NPC text container if not visible
+	if not npc_text_container.visible:
+		npc_text_container.show()
 	
-	# Update current text for typing effect
+	# Final text update
 	current_text = text
 	
 	# Don't start typing yet - wait for voice to start (if voice is enabled)
-	if not waiting_for_voice:
+	if not is_typing and not waiting_for_voice:
 		if current_npc and current_npc.has_method("is_currently_speaking"):
 			# Check if NPC will speak this
 			if current_npc.enable_voice and not current_text.begins_with("[Error"):
 				# Wait for voice to start
 				waiting_for_voice = true
-				# Keep old text visible while generating new audio - don't show "..."
-				# display_text = ""
-				# npc_dialogue_label.text = "..."
+				display_text = ""
+				npc_dialogue_label.text = "..."  # Show waiting indicator
 				if hide_timer:
 					hide_timer.stop()
 			else:
@@ -374,19 +292,17 @@ func _on_dialogue_updated(text: String):
 			_start_typewriter()
 
 func _on_dialogue_finished(text: String):
-	# ALWAYS clear is_generating flag to prevent permanent blocking
-	is_generating = false
-	
-	# Ignore if we're closing
-	if is_closing:
-		return
-	
 	# Don't show NPC response if input is VISIBLE and FOCUSED (suppress greeting during active chat)
 	if input_prompt.visible and input_field.has_focus():
 		return
 	
+	# Show NPC text container if not visible
+	if not npc_text_container.visible:
+		npc_text_container.show()
+	
 	# Final text update
 	current_text = text
+	is_generating = false
 	
 	# If already typing or waiting for voice, let those systems handle completion
 	if is_typing or waiting_for_voice:
@@ -401,14 +317,20 @@ func _on_dialogue_finished(text: String):
 func _on_npc_voice_started():
 	"""Called when NPC starts speaking - begin typewriter effect."""
 	if waiting_for_voice:
-		waiting_for_voice = false
-		_start_typewriter()
-
-func _on_npc_voice_finished():
-	"""Called when NPC finishes speaking - NOW start the hide timer."""
-	# Voice finished, now safe to start the auto-hide countdown
-	# This keeps text visible for the entire duration of audio
-	_start_auto_hide_timer()
+		wDon't close if user has re-engaged (input visible or new generation started)
+	if input_prompt.visible or is_generating:
+		print("DialogueUI: Timer expired but user re-engaged, keeping conversation open")
+		return
+	
+	# Hide UI but DON'T stop voice - let it finish naturally
+	npc_text_container.hide()
+	
+	# Fc_voice_finished():
+	"""Called when NPC finishes speaking - voice complete (timer already running)."""
+	# Voice finished, but we don't need to do anything
+	# Timer already started when typewriter finished
+	# Player might already be typing their next message
+	pass
 
 func _start_typewriter():
 	"""Start the typewriter effect."""
@@ -436,19 +358,12 @@ func _start_auto_hide_timer():
 		hide_timer.start(auto_hide_delay)
 
 func _on_hide_timer_timeout():
-	"""After text fades, slide back to default position."""
-	# Don't close if user has re-engaged (input visible or new generation started)
-	if input_field.has_focus() or is_generating:
-		print("DialogueUI: Timer expired but user re-engaged, keeping conversation open")
-		return
+	"""After text fades, close the entire conversation."""
+	# Hide UI but DON'T stop voice - let it finish naturally
+	npc_text_container.hide()
 	
-	# Slide back to default (input hidden) but keep NPC text visible
-	if dialogue_container.offset_top != container_default_top:
-		_slide_ui_down()
-	
-	# Keep text visible - don't close conversation
-	# Text will remain until next update or player starts new interaction
-	print("DialogueUI: Timer expired - keeping text visible until next update")
+	# Always fully close when timer expires
+	close_dialogue()
 
 # ============================================
 # UI SCALING SYSTEM
@@ -488,36 +403,33 @@ func _apply_scale(scale_factor: float):
 	if input_field:
 		input_field.add_theme_font_size_override("font_size", scaled_font_size)
 	
-	# Scale minimum sizes for dialogue label
+	# Scale minimum sizes
 	if npc_dialogue_label:
-		var base_min_height = 80.0
-		npc_dialogue_label.custom_minimum_size.y = base_min_height * scale_factor
+		var base_min_size = Vector2(600, 80)
+		npc_dialogue_label.custom_minimum_size = base_min_size * scale_factor
 	
-	# Scale parent container (moves as a unit)
-	if dialogue_container:
-		var base_default = 55.0  # Positive = lower on screen (NPC visible, input hidden)
-		var base_raised = 85.0   # Will be negative = higher on screen (both visible)
-		container_default_top = base_default * scale_factor
-		container_raised_top = -base_raised * scale_factor  # Negative to slide UP
-		dialogue_container.offset_top = container_default_top
-	
-	# Scale NPC text container spacing
+	# Scale container margins
 	if npc_text_container:
 		var base_margin = 20.0
 		var scaled_margin = base_margin * scale_factor
 		npc_text_container.offset_left = scaled_margin
 		npc_text_container.offset_right = -scaled_margin
-		npc_text_container.offset_top = -100.0 * scale_factor
-		npc_text_container.offset_bottom = -10.0 * scale_factor
+		npc_text_container.offset_bottom = -scaled_margin
+		
+		var base_height = 120.0
+		var scaled_height = base_height * scale_factor
+		npc_text_container.offset_top = -scaled_height
 	
-	# Scale input prompt spacing (stacked below NPC text)
+	# Scale input prompt
 	if input_prompt:
-		var base_margin = 20.0
-		var scaled_margin = base_margin * scale_factor
-		input_prompt.offset_left = scaled_margin
-		input_prompt.offset_right = -scaled_margin
-		input_prompt.offset_top = 0.0
-		input_prompt.offset_bottom = 70.0 * scale_factor
+		var base_input_width = 250.0
+		var scaled_input_width = base_input_width * scale_factor
+		input_prompt.offset_left = -scaled_input_width
+		input_prompt.offset_right = scaled_input_width
+		
+		var base_input_height = 60.0
+		var scaled_input_height = base_input_height * scale_factor
+		input_prompt.offset_top = -scaled_input_height
 	
 	print("[DialogueUI] UI scaled: font_size=", scaled_font_size, "px, factor=", scale_factor)
 

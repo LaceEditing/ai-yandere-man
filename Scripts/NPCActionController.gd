@@ -18,6 +18,13 @@ signal navigation_complete()
 @export var walk_speed: float = 2.0
 @export var turn_speed: float = 5.0
 
+# Turn-to-face player settings
+@export_group("Turn To Face Player")
+@export var enable_turn_to_player: bool = true  ## Automatically turn to face player
+@export_range(45.0, 120.0, 5.0, "suffix:degrees") var head_angle_threshold: float = 70.0  ## Turn body if player is beyond this angle
+@export_range(0.1, 10.0, 0.1) var face_player_turn_speed: float = 3.0  ## Speed when turning to player
+@export var use_turn_animations: bool = true  ## Use turn-in-place animations if available
+
 # Head tracking settings - DISABLED BY DEFAULT until we fix it
 @export var enable_head_tracking: bool = false  # SET TO FALSE - TOO BUGGY
 @export var head_track_speed: float = 3.0
@@ -53,6 +60,14 @@ var head_bone_idx: int = -1
 # Animation state
 var is_animation_playing: bool = false
 
+# Turn-to-face state
+var is_turning_to_player: bool = false
+var player_node: Node3D = null
+var is_in_conversation: bool = false
+var current_turn_animation: String = ""
+var has_turn_animations: bool = false
+var is_forced_running: bool = false  # Force run animation (e.g., during hostile chase)
+
 # Anim blend map - maps action names to AnimationTree blend node names
 const AVAILABLE_ANIMATIONS: Dictionary = {
 	"idle": "Idle",
@@ -65,7 +80,9 @@ const AVAILABLE_ANIMATIONS: Dictionary = {
 	"macarena": "DanceMacarena",
 	"chicken": "DanceChicken",
 	"tenna": "DanceTenna",
-	"break": "DanceBreak"
+	"break": "DanceBreak",
+	"turnleft": "TurnLeft",
+	"turnright": "TurnRight"
 }
 
 # Crouch state - for managing crouch transitions
@@ -157,6 +174,17 @@ func _ready():
 		# Set Idle as default
 		target_blend_values["Idle"] = 1.0
 		is_truly_idle = true
+		
+		# Check if turn animations are available
+		if animation_tree.get("parameters/TurnLeft/blend_amount") != null and animation_tree.get("parameters/TurnRight/blend_amount") != null:
+			has_turn_animations = true
+			print("[NPCActionController] Turn animations detected and enabled")
+		else:
+			has_turn_animations = false
+			print("[NPCActionController] Turn animations not found - using rotation only")
+	
+	# Get player reference
+	player_node = get_tree().get_first_node_in_group("player")
 
 func _process(delta):
 	# Smoothly interpolate blend amounts for AnimationTree
@@ -205,6 +233,10 @@ func _physics_process(delta):
 		# Always update movement blend when using movement animations
 		if using_animation_tree and (current_animation == "idle" or current_animation == "walk" or current_animation == "run"):
 			_update_movement_blend()
+	
+	# Turn to face player when idle/in conversation (but not during special animations or movement)
+	if enable_turn_to_player and not is_moving and current_animation in HEAD_TRACK_ALLOWED_ANIMS:
+		_update_turn_to_player(delta)
 	
 	# Movement
 	if is_moving and navigation_agent:
@@ -258,6 +290,86 @@ func _on_navigation_complete():
 		return
 	stop_moving()
 	navigation_complete.emit()
+
+
+## ============ TURN TO FACE PLAYER ============
+
+func set_conversation_state(talking: bool):
+	"""Called by NPCBase when conversation starts/ends"""
+	is_in_conversation = talking
+
+func _update_turn_to_player(delta: float):
+	"""Turn body to face player when they're to the side/behind"""
+	if not player_node or is_moving:
+		return
+	
+	var angle = _get_angle_to_player()
+	var abs_angle = abs(angle)
+	
+	# Start turning if beyond threshold, keep turning until nearly facing (within 5°)
+	var should_turn = is_turning_to_player or abs_angle > deg_to_rad(head_angle_threshold)
+	var close_enough = abs_angle < deg_to_rad(5.0)
+	
+	if should_turn and not close_enough:
+		# Add subtle walk blend for foot shuffle during turn
+		if using_animation_tree and animation_tree:
+			target_blend_values["Idle"] = 0.87  # Keep mostly idle
+			target_blend_values["Walk"] = 0.13  # Add subtle walk for feet
+			# Turn off everything else
+			for blend_name in blend_params.keys():
+				if blend_name != "Idle" and blend_name != "Walk":
+					target_blend_values[blend_name] = 0.0
+			
+			# Blend into walk faster during turn
+			current_blend_values["Walk"] = lerp(current_blend_values["Walk"], target_blend_values["Walk"], blend_transition_speed * 2.5 * delta)
+			current_blend_values["Idle"] = lerp(current_blend_values["Idle"], target_blend_values["Idle"], blend_transition_speed * 2.5 * delta)
+		
+		_turn_toward_player(delta)
+		if not is_turning_to_player:
+			print("[NPCActionController] Player at ", rad_to_deg(abs_angle), "° - turning with subtle foot shuffle")
+			is_turning_to_player = true
+	else:
+		if is_turning_to_player and close_enough:
+			print("[NPCActionController] Turn complete (within 5°)")
+			# Return to full idle quickly
+			if using_animation_tree:
+				target_blend_values["Idle"] = 1.0
+				target_blend_values["Walk"] = 0.0
+				# Force faster blend back to idle
+				current_blend_values["Walk"] = lerp(current_blend_values["Walk"], 0.0, blend_transition_speed * 2.0 * delta)
+		is_turning_to_player = false
+
+func _get_angle_to_player() -> float:
+	"""Get angle from NPC forward to player (positive = right, negative = left)"""
+	if not player_node or not npc_body:
+		return 0.0
+	
+	var to_player = (player_node.global_position - npc_body.global_position).normalized()
+	to_player.y = 0  # Ignore vertical
+	
+	var forward = -npc_body.global_transform.basis.z
+	forward.y = 0
+	forward = forward.normalized()
+	
+	# Get signed angle
+	var dot = forward.dot(to_player)
+	var cross = forward.cross(to_player).y
+	return atan2(cross, dot)
+
+func _turn_toward_player(delta: float):
+	"""Smoothly rotate body to face player"""
+	if not player_node or not npc_body:
+		return
+	
+	var direction = (player_node.global_position - npc_body.global_position)
+	direction.y = 0
+	
+	if direction.length() < 0.01:
+		return
+	
+	direction = direction.normalized()
+	var target_rotation = atan2(-direction.x, -direction.z)
+	npc_body.rotation.y = lerp_angle(npc_body.rotation.y, target_rotation, face_player_turn_speed * delta)
 
 # ============ ANIMATION CONTROL ============
 
@@ -328,14 +440,35 @@ func _play_animation_with_tree(anim_name: String) -> bool:
 	# Head tracking
 	look_at_modifier_3d.active = key in HEAD_TRACK_ALLOWED_ANIMS
 	
-	# For idle/walk/run, let the movement system handle blending
-	if key == "idle" or key == "walk" or key == "run":
+	# For idle/walk/run, let the movement system handle blending (unless forced running)
+	if key == "idle" or key == "walk" or (key == "run" and not is_forced_running):
 		# Don't force a specific blend - let _update_movement_blend handle it
 		# But do turn off other animations
 		for blend_name in blend_params.keys():
 			if blend_name != "Idle" and blend_name != "Walk" and blend_name != "Running":
 				target_blend_values[blend_name] = 0.0
 		print("[NPCActionController] 🎬 Movement mode: '", key, "' (speed-controlled blend)")
+	elif key == "run" and is_forced_running:
+		# Force running animation (hostile chase)
+		target_blend_values["Idle"] = 0.0
+		target_blend_values["Walk"] = 0.0
+		target_blend_values["Running"] = 1.0
+		# Turn off other animations
+		for blend_name in blend_params.keys():
+			if blend_name != "Running":
+				target_blend_values[blend_name] = 0.0
+		print("[NPCActionController] 🎬 FORCED RUN MODE (hostile chase)")
+	elif key == "turnleft" or key == "turnright":
+		# Turn animations: keep idle active for upper body, blend turn for lower body
+		var blend_node = AVAILABLE_ANIMATIONS[key]
+		print("[NPCActionController] 🎬 Playing turn: '", key, "' (blended with idle)")
+		for blend_name in blend_params.keys():
+			if blend_name == "Idle":
+				target_blend_values[blend_name] = 0.5  # Keep idle at 50% for upper body
+			elif blend_name == blend_node:
+				target_blend_values[blend_name] = 0.5  # Turn animation at 50%
+			else:
+				target_blend_values[blend_name] = 0.0
 	else:
 		# For other animations, set the appropriate blend node
 		var blend_node = AVAILABLE_ANIMATIONS[key]
@@ -417,12 +550,16 @@ func _update_movement_blend():
 	if not animation_tree or not using_animation_tree:
 		return
 	
+	# Don't override forced running state
+	if is_forced_running:
+		return
+	
 	# Use fixed thresholds for animation states (not relative to walk_speed)
 	# This way changing walk_speed doesn't affect which animation plays
 	var speed = current_movement_speed
 	
 	# Determine animation state based on absolute speed
-	if speed > 3.0:  # Running (fast movement)
+	if speed > 2.8:  # Running (fast movement) - lowered from 3.0
 		# Transition to running
 		target_blend_values["Idle"] = 0.0
 		target_blend_values["Walk"] = 0.0

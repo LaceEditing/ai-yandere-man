@@ -43,8 +43,9 @@ func _ready():
 	game_manager = get_node_or_null("/root/GameManager")
 
 func _is_menu_open() -> bool:
-	# Check if settings menu is open
-	if ai_settings_menu and ai_settings_menu.visible:
+	# Check if pause menu is open
+	var pause_menu = get_node_or_null("/root/PauseMenu")
+	if pause_menu and pause_menu.visible:
 		return true
 	
 	# Check if dialogue input is open (typing mode)
@@ -54,21 +55,8 @@ func _is_menu_open() -> bool:
 	return false
 
 func _input(event):
-	# Only block input if settings menu is open or typing in dialogue
+	# Only block input if menu is open or typing in dialogue
 	if _is_menu_open():
-		return
-	
-	# Press Tab to open AI Settings
-	if event.is_action_pressed("OpenMenu"):
-		if ai_settings_menu and ai_settings_menu.has_method("show_menu"):
-			ai_settings_menu.show_menu()
-		get_viewport().set_input_as_handled()
-		return
-		
-	# Press U to open UI Settings
-	if event.is_action_pressed("OpenUIMenu"):
-		UISettingsMenu.show_menu()
-		get_viewport().set_input_as_handled()
 		return
 	
 	# Press Enter to talk to the NPC (just opens input, doesn't lock player)
@@ -123,15 +111,18 @@ func _physics_process(delta: float):
 func attempt_dialogue():
 	print("[DEBUG] [Player] attempt_dialogue called - player pressed Enter!")
 	
-	# Don't start new dialogue if AI is busy responding
-	if DialogueUI and DialogueUI.has_method("is_busy") and DialogueUI.is_busy():
-		print("AI is still responding, please wait...")
+	# Allow interruption if DialogueUI is ready for input (even during voice playback)
+	# Block only if truly busy (generating AI response or closing)
+	if DialogueUI and DialogueUI.has_method("is_input_open") and DialogueUI.is_input_open():
+		# Input is already open, let normal input handling take over
 		return
 	
-	# Don't start new dialogue if conversation is still active (text still visible)
-	if DialogueUI and DialogueUI.has_method("has_active_conversation") and DialogueUI.has_active_conversation():
-		print("Please wait for current conversation to close...")
-		return
+	if DialogueUI and DialogueUI.has_method("is_busy"):
+		# Check if we're in a state that can be interrupted
+		var can_interrupt = DialogueUI.has_method("can_show_input") and DialogueUI.can_show_input()
+		if DialogueUI.is_busy() and not can_interrupt:
+			print("AI is still responding, please wait...")
+			return
 	
 	# Get the NPC in the scene
 	var npc = NPCManager.get_current_npc()

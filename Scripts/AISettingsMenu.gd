@@ -40,7 +40,7 @@ var is_azure_key_visible: bool = false
 var model_ids: Array = []
 
 func _ready():
-	hide()
+	hide()  # Hide by default - can be shown standalone or in PauseMenu
 	
 	# Setup provider options
 	provider_option.clear()
@@ -248,8 +248,16 @@ func _on_apply_pressed():
 	print("AI settings applied!")
 
 func _on_close_pressed():
-	hide()
-	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	# If we're in standalone mode, hide ourselves
+	# If we're embedded in pause menu, close the pause menu
+	var pause_menu = get_node_or_null("/root/PauseMenu")
+	if pause_menu and pause_menu.visible and pause_menu.is_paused:
+		# Embedded in pause menu - close it
+		pause_menu.close_menu()
+	else:
+		# Standalone mode
+		hide()
+		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 func show_menu():
 	_load_current_settings()

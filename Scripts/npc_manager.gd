@@ -17,3 +17,7 @@ func get_current_npc() -> Node:
 	if active_npcs.size() > 0:
 		return active_npcs[0]
 	return null
+
+# Get all registered NPCs
+func get_all_npcs() -> Array:
+	return active_npcs

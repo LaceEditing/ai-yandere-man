@@ -4,6 +4,13 @@ class_name RVCProcessor
 ## RVC Voice Conversion - Post-process TTS audio through voice cloning
 ## Uses a background server to keep models warm for fast inference (~0.1s vs ~6s cold).
 ## Server starts automatically on game launch - completely invisible to player.
+##
+## SPEED OPTIMIZATION TIPS:
+## 1. Use f0_method = "crepe-tiny" (fastest) vs "rmvpe" (slowest but best quality)
+## 2. Increase hop_length (256-512 = fast, 64-128 = precise but slow)
+## 3. Enable GPU (use_gpu = true) if you have CUDA-capable GPU
+## 4. Lower index_rate (0.5-0.6) for faster feature retrieval
+## 5. Server mode keeps models warm (~0.1-0.3s) vs CLI mode (~2-6s cold start)
 
 signal conversion_started()
 signal conversion_completed(audio_stream: AudioStreamWAV)

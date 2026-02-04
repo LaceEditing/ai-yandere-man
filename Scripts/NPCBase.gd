@@ -133,6 +133,7 @@ enum AzureVoice {
 @export var enable_rvc: bool = false ## Post-process TTS through RVC voice conversion
 @export_file("*.pth") var rvc_model_path: String = "" ## Drag .pth model file here
 @export_file("*.index") var rvc_index_path: String = "" ## Drag .index file here (optional but recommended)
+@export_range(0.0, 1.0, 0.05) var rvc_index_rate: float = 0.75 ## Index feature strength (higher = more like training voice, lower = more natural)
 @export_range(-12, 12, 1) var rvc_pitch_shift: int = 0 ## Pitch shift in semitones
 @export_enum("crepe-tiny:Fast", "crepe:Balanced", "rmvpe:Quality") var rvc_quality: String = "crepe-tiny" ## Speed vs quality trade-off
 @export_range(64, 512, 64) var rvc_hop_length: int = 256 ## Higher = faster, lower = more precise pitch tracking
@@ -158,6 +159,12 @@ enum AzureVoice {
 @export var autonomous_only_when_idle: bool = true ## Only make autonomous decisions when not in conversation
 @export_range(0.0, 1.0, 0.05) var spontaneous_action_chance: float = 0.2 ## Probability of spontaneous actions during conversation (0.2 = 20%)
 @export_multiline var npc_current_goal: String = "" ## Current objective - influences behavior and dialogue. Leave empty for no specific goal.
+
+# Hostile Mode settings
+@export_group("Hostile Mode")
+@export_file("*.mp3", "*.wav", "*.ogg") var hostile_audio_file: String = "" ## Audio file to play when becoming hostile
+@export var hostile_subtitle: String = "You know what? That's it! I've had it! Get over here now!" ## Subtitle text to display with hostile audio
+@export_range(-80.0, 24.0, 0.5) var hostile_audio_volume: float = 0.0 ## Volume for hostile audio (dB, 0=normal, positive=louder)
 
 # ============ INTERNAL STATE ============
 
@@ -337,6 +344,8 @@ func _ready():
 	# Setup action system BEFORE building system prompt
 	if enable_actions:
 		_setup_actions()
+	
+	look_at_modifier_3d = $AnimeBoy/Armature/GeneralSkeleton/LookAtModifier3D
 	
 	system_prompt = build_system_prompt()
 	_setup_provider()
@@ -1224,6 +1233,17 @@ func _setup_voice():
 	voice_player.unit_size = 10.0
 	voice_player.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
 	
+	# Configure raytraced audio if using RaytracedAudioPlayer3D
+	# Voice should have minimal muffling - adjust interpolation for faster response
+	if voice_player.get_class() == "RaytracedAudioPlayer3D" or "RaytracedAudioPlayer3D" in str(voice_player.get_script()):
+		# Make voice respond faster to line-of-sight (less laggy muffling)
+		# Note: The RaytracedAudioListener's muffle_interpolation globally affects this
+		# The player itself doesn't have per-instance muffle settings
+		# To truly fix this, adjust the RaytracedAudioListener in your scene:
+		# - Increase rays_count (more accuracy, default 4)
+		# - Increase muffle_interpolation (faster transitions, default 0.01 -> try 0.1)
+		print("[", npc_name, "] Using RaytracedAudioPlayer3D for voice - ensure RaytracedAudioListener has muffle_interpolation >= 0.1")
+	
 	if not voice_player.finished.is_connected(_on_voice_done):
 		voice_player.finished.connect(_on_voice_done)
 	
@@ -1291,6 +1311,7 @@ func _setup_rvc():
 	
 	# Configure RVC settings
 	rvc_processor.pitch_shift = rvc_pitch_shift
+	rvc_processor.index_rate = rvc_index_rate
 	rvc_processor.f0_method = rvc_quality  # "crepe-tiny", "crepe", or "rmvpe"
 	rvc_processor.hop_length = rvc_hop_length
 	rvc_processor.use_gpu = rvc_use_gpu
@@ -1546,6 +1567,11 @@ func build_system_prompt() -> String:
 7. BANNED: *smiles*, (laughs), [grins], *nods* or ANY similar formatting
 8. Express emotion through WORDS: Say "Hah!" not (laughs)
 
+# INTERRUPTION HANDLING:
+If you see [INTERRUPTED WHILE SPEAKING] before the player's message, it means they cut you off mid-sentence.
+React naturally - you might be annoyed, surprised, or understanding depending on your personality.
+Keep your response concise since they clearly wanted to say something urgent.
+
 # EMOTION SYSTEM (USE THIS!):
 Your current emotions: {emotion_desc}
 {emotion_style}
@@ -1747,6 +1773,10 @@ func start_conversation():
 	is_talking = true
 	print("[DEBUG] [", npc_name, "] start_conversation called, is_talking = true")
 	
+	# Notify ActionController
+	if action_controller:
+		action_controller.set_conversation_state(true)
+	
 	if enable_forgetting and forget_timer:
 		forget_timer.stop()
 	
@@ -1784,6 +1814,10 @@ func start_conversation():
 func end_conversation():
 	is_talking = false
 	
+	# Notify ActionController
+	if action_controller:
+		action_controller.set_conversation_state(false)
+	
 	# DON'T stop patience timer - it should keep running if NPC is waiting for response!
 	# Timer only stops when:
 	# 1. Player responds (in talk_to_npc)
@@ -1794,6 +1828,12 @@ func end_conversation():
 
 
 func talk_to_npc(message: String):
+	# DEBUG TRIGGER: Check for hostile mode trigger phrase
+	if message.to_lower().contains("fuck you"):
+		print("[", npc_name, "] 🔥 DEBUG: Hostile trigger detected!")
+		_become_hostile()
+		return
+	
 	# Stop patience timer - player is responding!
 	if enable_patience and patience_timer:
 		print("[DEBUG] [", npc_name, "] Player responded, STOPPING patience timer")
@@ -1813,6 +1853,50 @@ func talk_to_npc(message: String):
 		_send_to_groq(message)
 	else:
 		_send_to_local(message)
+
+
+func talk_to_npc_with_interruption(message: String, was_interrupted: bool):
+	"""Talk to NPC with interruption context."""
+	# DEBUG TRIGGER: Check for hostile mode trigger phrase
+	if message.to_lower().contains("fuck you"):
+		print("[", npc_name, "] 🔥 DEBUG: Hostile trigger detected!")
+		_become_hostile()
+		return
+	
+	# Stop patience timer - player is responding!
+	if enable_patience and patience_timer:
+		print("[DEBUG] [", npc_name, "] Player responded, STOPPING patience timer")
+		is_waiting_for_response = false
+		patience_timer.stop()
+	
+	# Add subtle interruption context - AI knows but doesn't have to acknowledge it
+	var final_message = message
+	if was_interrupted:
+		# Subtle note that doesn't force acknowledgment
+		final_message = "(while you were speaking) " + message
+		print("[DEBUG] [", npc_name, "] Player interrupted during speech")
+	
+	if enable_memory:
+		conversation_history.append({"role": "user", "content": final_message})
+		trim_conversation_history()
+	
+	current_response = ""
+	
+	# Rebuild system prompt with current mood and state
+	system_prompt = build_system_prompt()
+	
+	if using_groq:
+		_send_to_groq(final_message)
+	else:
+		_send_to_local(final_message)
+
+
+func stop_voice():
+	"""Immediately stop voice playback (called when player interrupts)."""
+	if voice_player and voice_player.playing:
+		voice_player.stop()
+		is_speaking = false
+		print("[", npc_name, "] Voice stopped - player interrupted")
 
 
 func _send_to_local(message: String):
@@ -2195,14 +2279,56 @@ func _check_hostility():
 func _become_hostile():
 	"""Transition to hostile state."""
 	is_hostile = true
-	print("[", npc_name, "] 😡 BECAME HOSTILE! (Hostility: ", current_emotions.get("hostility", 0), ")")
+	
+	# Set hostility emotion to maximum to keep hostile state
+	set_emotion("hostility", 100)
+	
+	print("[", npc_name, "] 😡 BECAME HOSTILE!")
+	
+	# Ensure player_ref is set (in case enable_hostility was false)
+	if not player_ref:
+		player_ref = get_tree().get_first_node_in_group("player")
+		print("[", npc_name, "] ⚠️  player_ref was null, set to: ", player_ref)
+	
+	# Debug check
+	print("[", npc_name, "] 🔍 player_ref: ", player_ref, ", action_controller: ", action_controller)
+	
+	# Switch to chase music
+	var game_manager = get_node_or_null("/root/GameManager")
+	if game_manager and game_manager.has_method("play_chase_music"):
+		game_manager.play_chase_music()
+	
+	# Stop any current speech/dialogue immediately
+	if is_speaking:
+		voice_player.stop()
+		is_speaking = false
+	
+	# Play hostile audio if configured
+	if not hostile_audio_file.is_empty():
+		var audio_stream = load(hostile_audio_file)
+		if audio_stream:
+			print("[", npc_name, "] ⚡ Playing hostile audio: ", hostile_audio_file)
+			
+			# Show subtitle immediately
+			is_autonomous_text = true
+			current_response = hostile_subtitle
+			DialogueUI.show_dialogue(self, false)
+			dialogue_updated.emit(hostile_subtitle)
+			dialogue_finished.emit(hostile_subtitle)
+			is_autonomous_text = false
+			
+			# Play audio immediately
+			voice_player.stream = audio_stream
+			voice_player.volume_db = hostile_audio_volume
+			voice_player.play()
+			is_speaking = true
+			voice_started.emit()
+		else:
+			push_warning("[", npc_name, "] Failed to load hostile audio: ", hostile_audio_file)
 	
 	# Start chasing player
 	if player_ref and action_controller:
 		_start_chasing_player()
-	
-	# Visual/audio feedback could go here
-	# e.g., change shader tint, play hostile sound
 
 
 func _become_peaceful():
@@ -2213,6 +2339,22 @@ func _become_peaceful():
 	# Stop chasing
 	if action_controller:
 		_stop_chasing_player()
+	
+	# Check if any other NPCs are still hostile
+	var any_npc_hostile = false
+	var npc_manager = get_node_or_null("/root/NPCManager")
+	if npc_manager and npc_manager.has_method("get_all_npcs"):
+		var all_npcs = npc_manager.get_all_npcs()
+		for other_npc in all_npcs:
+			if other_npc != self and "is_hostile" in other_npc and other_npc.is_hostile:
+				any_npc_hostile = true
+				break
+	
+	# Only switch back to normal music if no NPCs are hostile
+	if not any_npc_hostile:
+		var game_manager = get_node_or_null("/root/GameManager")
+		if game_manager and game_manager.has_method("play_normal_music"):
+			game_manager.play_normal_music()
 
 
 func _try_attack():
@@ -2245,9 +2387,17 @@ func _start_chasing_player():
 	is_chasing = true
 	print("[", npc_name, "] 🏃 Chasing player!")
 	
-	# Increase movement speed for chase (slower for now)
+	# Increase movement speed for chase
 	if "walk_speed" in action_controller:
-		action_controller.walk_speed = 2.5  # Slightly faster than normal walk (was 4.0)
+		action_controller.walk_speed = 3.0  # Running speed
+	
+	# Force running animation (prevents auto-switching based on speed)
+	if "is_forced_running" in action_controller:
+		action_controller.is_forced_running = true
+	
+	# Switch to running animation
+	if action_controller.has_method("play_animation"):
+		action_controller.play_animation("run")
 	
 	_update_chase_target()
 
@@ -2256,10 +2406,13 @@ func _update_chase_target():
 	if not player_ref or not action_controller or not is_hostile:
 		return
 	
+	# Ensure running animation is playing
+	if action_controller.has_method("play_animation") and action_controller.current_animation != "run":
+		action_controller.play_animation("run")
+	
 	# Navigate to player's position
 	var player_pos = player_ref.global_position
 	action_controller.move_to_position(player_pos)
-	# Run animation will trigger automatically based on movement speed
 
 func _stop_chasing_player():
 	"""Stop pursuing the player."""
@@ -2268,6 +2421,10 @@ func _stop_chasing_player():
 	
 	is_chasing = false
 	print("[", npc_name, "] ⏹️ Stopped chasing")
+	
+	# Clear forced running flag
+	if "is_forced_running" in action_controller:
+		action_controller.is_forced_running = false
 	
 	# Reset movement speed
 	if "walk_speed" in action_controller:
@@ -2314,6 +2471,8 @@ func _on_timer_timeout() -> void:
 	var player: CharacterBody3D = get_tree().get_first_node_in_group("player")
 	var bodies = non_ai_vision.get_overlapping_bodies()
 	if player in bodies:
+		print("Looking At Player")
 		look_at_modifier_3d.target_node = player.get_child(0).get_child(0).get_path()
 	else:
+		print("NOT LOOKING")
 		look_at_modifier_3d.target_node = ""
